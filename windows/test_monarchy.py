@@ -13,10 +13,12 @@ except ImportError:
     tkinter_stub = types.ModuleType("tkinter")
     tkinter_stub.Tk = object
     tkinter_stub.messagebox = types.SimpleNamespace()
+    tkinter_stub.simpledialog = types.SimpleNamespace()
     tkinter_stub.ttk = types.SimpleNamespace()
     sys.modules["tkinter"] = tkinter_stub
     sys.modules["tkinter.ttk"] = tkinter_stub.ttk
     sys.modules["tkinter.messagebox"] = tkinter_stub.messagebox
+    sys.modules["tkinter.simpledialog"] = tkinter_stub.simpledialog
 
 import monarchy
 
@@ -56,6 +58,12 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(settings["mode"], "JESTER")
             self.assertEqual(settings["points"]["inventory"], [1, 2])
             self.assertIn("purchase", settings["points"])
+
+
+class UpdateTests(unittest.TestCase):
+    def test_semantic_versions(self):
+        self.assertEqual(monarchy.version_key("v0.2.2"), (0, 2, 2))
+        self.assertIsNone(monarchy.version_key("latest"))
 
 
 if __name__ == "__main__":

@@ -27,9 +27,13 @@ release at `PixelatingStars/Monarchy` on startup. Newer semantic-version tags
 produce an Update banner. Install downloads the portable ZIP plus its SHA-256
 asset, verifies it, preserves the adjacent `data` directory, replaces program
 files only after the running process exits, and restarts Monarchy. Public
-releases need no credentials. Private-release authentication is designed to
-use a read-only token from Windows Credential Manager rather than embedding a
-secret in the executable or portable settings.
+releases need no credentials. Private-release authentication uses a read-only
+fine-grained token from Windows Credential Manager rather than embedding a
+secret in the executable or portable settings. Windows v0.2.2 adds a
+**Connect private updates** control that validates the token belongs to
+`PixelatingStars` and can read the latest Monarchy release before saving it as
+the `Monarchy/GitHubUpdates` generic credential. Install v0.2.2 and connect this
+credential before changing the GitHub repository from public to private.
 
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow

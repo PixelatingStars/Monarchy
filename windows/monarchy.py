@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, simpledialog, ttk
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 UPDATE_CREDENTIAL = "Monarchy/GitHubUpdates"
@@ -366,15 +366,40 @@ def roblox_window():
         return None
 
 
-def focus_window(window) -> None:
+def focus_window(window) -> bool:
+    import win32api
     import win32con
     import win32gui
+    import win32process
     hwnd = window[0]
     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+    attached = []
     try:
+        current_thread = win32api.GetCurrentThreadId()
+        target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
+        foreground = win32gui.GetForegroundWindow()
+        foreground_thread = win32process.GetWindowThreadProcessId(foreground)[0] if foreground else 0
+        for thread_id in {target_thread, foreground_thread} - {0, current_thread}:
+            win32process.AttachThreadInput(current_thread, thread_id, True)
+            attached.append(thread_id)
+        win32gui.BringWindowToTop(hwnd)
         win32gui.SetForegroundWindow(hwnd)
+        win32gui.SetFocus(hwnd)
+    except Exception as error:
+        log("play", f"direct foreground handoff failed: {error}")
+    finally:
+        for thread_id in reversed(attached):
+            try:
+                win32process.AttachThreadInput(win32api.GetCurrentThreadId(), thread_id, False)
+            except Exception:
+                pass
+    time.sleep(.25)
+    foreground = win32gui.GetForegroundWindow()
+    try:
+        foreground_root = win32gui.GetAncestor(foreground, win32con.GA_ROOT)
     except Exception:
-        pass
+        foreground_root = foreground
+    return foreground_root == hwnd
 
 
 def ocr_region(window, region, psm=6) -> str:
@@ -396,15 +421,17 @@ def ocr_region(window, region, psm=6) -> str:
 def activate_play_with_ui_navigation(window) -> None:
     """Activate the landing-screen Play button through Roblox UI Navigation."""
     import pyautogui
-    focus_window(window)
-    time.sleep(.35)
-    pyautogui.press("\\")
-    time.sleep(.25)
-    pyautogui.press("down")
-    time.sleep(.25)
-    pyautogui.press("enter")
-    time.sleep(.35)
-    pyautogui.press("\\")
+    if not focus_window(window):
+        raise RuntimeError("Windows did not give foreground focus to Roblox")
+    log("play", "Roblox foreground focus confirmed")
+    for label, key, delay in (("UI Navigation toggle", "\\", .35),
+                              ("Down", "down", .35),
+                              ("Enter", "enter", .5),
+                              ("UI Navigation exit", "\\", 0)):
+        log("play", f"sending {label}")
+        pyautogui.press(key)
+        if delay:
+            time.sleep(delay)
 
 
 def wait_for_roll(timeout=90):

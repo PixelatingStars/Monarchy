@@ -32,6 +32,13 @@ activate Play. It makes at most three attempts, eight seconds apart, and still
 requires OCR confirmation of the in-game Roll control within the existing
 90-second watchdog before biome or Jester automation proceeds.
 
+Windows v0.3.1 hardens this step against Windows foreground-lock behavior. It
+temporarily attaches the Monarchy thread to the Roblox and current foreground
+input queues, restores and raises Roblox, requests keyboard focus, then verifies
+Roblox is truly foreground before sending any navigation keys. Each key is
+logged individually, and an unsuccessful focus handoff is reported as a failed
+attempt rather than silently claiming input was sent.
+
 The Windows portable dashboard is versioned and checks the latest GitHub
 release at `PixelatingStars/Monarchy` on startup. Newer semantic-version tags
 produce an Update banner. Install downloads the portable ZIP plus its SHA-256

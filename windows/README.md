@@ -92,6 +92,11 @@ access before saving the token in Windows Credential Manager under
 
 - Jester automation defaults to disabled. Use **Calibrate Jester** for every
   listed control before enabling it.
+- Play activation verifies Roblox has foreground focus before sending UI
+  Navigation keys. Recent activity records the focus result and every key. A
+  `Windows did not give foreground focus to Roblox` failure means another app
+  or Windows focus policy retained keyboard input; Monarchy does not send the
+  sequence blindly in that state.
 - Item selection is OCR-verified and fails closed before pressing Use.
 - Only Lucky Potion, Speed Potion, Heavenly Potion, and Potion of Bound can be
   purchased.

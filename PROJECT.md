@@ -35,6 +35,10 @@ Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,
 creates the release and uploads the ZIP plus SHA-256 file automatically.
+The workflow explicitly creates `.venv` with the Python 3.12 interpreter from
+`actions/setup-python`; invoking the generic Windows `py -3` launcher on a
+hosted runner selected its preinstalled Python 3.14 instead, whose runner image
+lacked the Tcl/Tk runtime required by the portable build.
 
 The Windows portable build stores all mutable state in a `data` directory next
 to the executable. Distribution packages must exclude that directory's

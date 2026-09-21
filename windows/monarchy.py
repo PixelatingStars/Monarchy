@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Monarchy for Windows Edition.
 
-Portable local listener, dashboard, Roblox launcher, biome watcher, and guarded
-Jester buyer. Windows-only integrations are imported lazily so the source can
-still be syntax-checked on another platform.
+Portable local listener, dashboard, Roblox launcher, and biome watcher.
+Windows-only integrations are imported lazily so the source can still be
+syntax-checked on another platform.
 """
 
 from __future__ import annotations
@@ -21,12 +21,11 @@ import tkinter as tk
 import urllib.error
 import urllib.request
 from datetime import datetime
-from difflib import SequenceMatcher
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.3"
+APP_VERSION = "0.3.4"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -39,21 +38,7 @@ SETTINGS_FILE = DATA_DIR / "settings.json"
 LOG_FILE = DATA_DIR / "activity.log"
 CHANNEL_FILE = DATA_DIR / "channel.json"
 DEFAULT_SETTINGS = {
-    "mode": "BIOME",
-    "jester_enabled": False,
     "close_roblox_on_stop": True,
-    "points": {
-        "inventory": [33, 516], "items_tab": [1268, 334],
-        "inventory_search": [1095, 365], "merchant_teleporter": [850, 475],
-        "teleporter_use": [678, 579], "dialogue_skip": [1055, 810],
-        "jester_open": [618, 942], "stock_1": [963, 718],
-        "stock_2": [1154, 718], "stock_3": [1344, 718],
-        "stock_4": [1534, 718], "stock_5": [1724, 718],
-        "set_max": [1338, 614], "purchase": [1178, 661],
-    },
-    "targets": {name: True for name in (
-        "LUCKY POTION", "SPEED POTION", "HEAVENLY POTION", "POTION OF BOUND"
-    )},
 }
 
 
@@ -145,18 +130,9 @@ def load_settings() -> dict:
         pass
     result = json.loads(json.dumps(DEFAULT_SETTINGS))
     if isinstance(saved, dict):
-        for key in ("mode", "jester_enabled", "close_roblox_on_stop"):
-            if key in saved:
-                result[key] = saved[key]
-        for section in ("points", "targets"):
-            if isinstance(saved.get(section), dict):
-                result[section].update(saved[section])
+        if "close_roblox_on_stop" in saved:
+            result["close_roblox_on_stop"] = saved["close_roblox_on_stop"]
     return result
-
-
-def save_settings(settings: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
 
 
 _log_lock = threading.Lock()
@@ -239,21 +215,21 @@ def discord_title_channel():
         source = " ".join(title.upper() for title in titles if "DISCORD" in title.upper())
     except Exception:
         return None
-    for label in ("JESTER", MIXED_CHANNEL, "CORRUPTION", "DREAMSPACE", "GLITCHED",
+    for label in (MIXED_CHANNEL, "CORRUPTION", "DREAMSPACE", "GLITCHED",
                   "GLITCH", "CYBERSPACE", "SINGULARITY", "HELL"):
         if label in source:
             name = "GLITCH" if label == "GLITCHED" else label
-            return name, "JESTER" if name == "JESTER" else "BIOME"
+            return name, "BIOME"
     return None
 
 
 def channel_from_text(text: str):
     source = text.upper()
-    for label in ("JESTER", MIXED_CHANNEL, "CORRUPTION", "DREAMSPACE", "GLITCHED",
+    for label in (MIXED_CHANNEL, "CORRUPTION", "DREAMSPACE", "GLITCHED",
                   "GLITCH", "CYBERSPACE", "SINGULARITY", "HELL"):
         if label in source:
             name = "GLITCH" if label == "GLITCHED" else label
-            return name, "JESTER" if name == "JESTER" else "BIOME"
+            return name, "BIOME"
     return None
 
 
@@ -444,21 +420,14 @@ class MonarchyServer:
         self.channel = ("UNSUPPORTED", "UNSUPPORTED")
         self.discord_desktop_seen = set()
 
-    def mode(self):
-        return str(load_settings().get("mode", "BIOME")).upper()
-
     def update_channel(self, name, kind):
         self.channel = (name, kind)
         detected = discord_title_channel()
         if detected:
             self.channel = detected
-        mode = self.mode()
-        valid = (mode == "JESTER" and self.channel == ("JESTER", "JESTER")) or (
-            mode == "BIOME" and self.channel[1] == "BIOME" and
-            self.channel[0] in BIOMES | {MIXED_CHANNEL}
-        )
+        valid = self.channel[1] == "BIOME" and self.channel[0] in BIOMES | {MIXED_CHANNEL}
         CHANNEL_FILE.write_text(json.dumps({"name": self.channel[0], "kind": self.channel[1],
-            "mode": mode, "matchesMode": valid}, indent=2), encoding="utf-8")
+            "mode": "BIOME", "matchesMode": valid}, indent=2), encoding="utf-8")
         self.status_callback()
         return valid
 
@@ -489,11 +458,8 @@ class MonarchyServer:
             biome = channel
         else:
             biome = "CORRUPTION"
-        if kind == "UNSUPPORTED" or kind != self.mode():
-            log("listener", f"ignored link; channel={channel}, mode={self.mode()}")
-            return 204
-        if kind == "JESTER" and not load_settings().get("jester_enabled"):
-            log("listener", "ignored Jester link; Windows Jester automation is disabled")
+        if kind != "BIOME" or channel not in BIOMES | {MIXED_CHANNEL}:
+            log("listener", f"ignored link; channel={channel}, mode=BIOME")
             return 204
         if link_id in self.seen:
             return 208
@@ -546,12 +512,11 @@ class MonarchyServer:
         link_id, uri, biome, kind, players = candidate
         self.seen.add(link_id)
         log("listener", f"joining {link_id}; target={kind}:{biome}; players={players}")
-        notify("Monarchy", f"New {'Jester' if kind == 'JESTER' else biome.title()} link detected")
+        notify("Monarchy", f"New {biome.title()} link detected")
         if roblox_running():
             close_roblox()
         os.startfile(uri)  # noqa: S606 - registered Roblox protocol is intentional
-        worker = jester_workflow if kind == "JESTER" else biome_workflow
-        threading.Thread(target=worker, args=(biome,), daemon=True).start()
+        threading.Thread(target=biome_workflow, args=(biome,), daemon=True).start()
 
     def dispatch_loop(self):
         while self.httpd:
@@ -599,7 +564,7 @@ class MonarchyServer:
         self.thread.start()
         threading.Thread(target=self.dispatch_loop, daemon=True).start()
         threading.Thread(target=self.discord_desktop_loop, daemon=True).start()
-        log("listener", f"ready on 127.0.0.1:{PORT} in {self.mode()} mode")
+        log("listener", f"ready on 127.0.0.1:{PORT} in BIOME mode")
         self.status_callback()
 
     def stop(self):
@@ -642,110 +607,34 @@ def biome_workflow(target):
         time.sleep(1)
 
 
-def fuzzy_word(text, expected, threshold=.75):
-    words = re.sub(r"[^A-Z ]", " ", text.upper()).split()
-    return any(SequenceMatcher(None, expected, word).ratio() >= threshold for word in words)
-
-
-def jester_workflow(_target):
-    settings = load_settings()
-    if not settings.get("jester_enabled"):
-        return
-    log("jester", "started; waiting for playable Roblox window")
-    window = wait_for_roll()
-    if not window:
-        log("jester", "Roll screen not reached; closing Roblox")
-        close_roblox()
-        return
-    import pyautogui
-    focus_window(window)
-    points = settings["points"]
-
-    def click(name, pause=.25):
-        _, x, y, width, height = window
-        rx, ry = points[name]
-        pyautogui.click(round(x + rx * width / 1920), round(y + ry * height / 1080))
-        time.sleep(pause)
-
-    click("inventory")
-    time.sleep(1)
-    if "INVENTORY" not in ocr_region(window, (450, 260, 1050, 570)):
-        log("jester", "Inventory did not open; aborting")
-        close_roblox()
-        return
-    click("items_tab")
-    time.sleep(6)
-    click("inventory_search")
-    pyautogui.hotkey("ctrl", "a")
-    pyautogui.write("Merchant Teleporter")
-    time.sleep(1)
-    rx, ry = points["merchant_teleporter"]
-    tile = ocr_region(window, (max(0, rx - 110), max(0, ry - 90), 220, 180))
-    if not fuzzy_word(tile, "TELEPORTER") or "POTION" in tile or "PATION" in tile:
-        log("jester", f"SAFETY ABORT: teleporter tile not verified; OCR={tile[:180]}")
-        close_roblox()
-        return
-    click("merchant_teleporter")
-    time.sleep(1.5)
-    description = ocr_region(window, (460, 590, 340, 220))
-    safe = (fuzzy_word(description, "MERCHANT") and
-            (fuzzy_word(description, "TELEPORTS") or fuzzy_word(description, "TELEPORTER")) and
-            "POTION" not in description and "PATION" not in description)
-    if not safe:
-        log("jester", f"SAFETY ABORT: description not verified; OCR={description[:180]}")
-        close_roblox()
-        return
-    click("teleporter_use")
-    time.sleep(1.5)
-    pyautogui.press("e")
-    time.sleep(.5)
-    for _ in range(12):
-        click("dialogue_skip", .04)
-    confirmed = False
-    for _ in range(4):
-        click("jester_open")
-        text = ocr_region(window, (820, 300, 1050, 470), 11)
-        if ("JESTER" in text and "SHOP" in text) or "PURCHASE" in text:
-            confirmed = True
-            break
-        for _ in range(4):
-            click("dialogue_skip", .04)
-    if not confirmed:
-        log("jester", "shop not confirmed; no stock touched")
-        close_roblox()
-        return
-    enabled = {name for name, value in settings["targets"].items() if value}
-    for slot in range(1, 6):
-        click(f"stock_{slot}")
-        time.sleep(.85)
-        header = ocr_region(window, (1080, 350, 760, 100))
-        matched = next((name for name in enabled if SequenceMatcher(None, name, header).ratio() >= .7 or name in header), None)
-        if not matched:
-            log("jester", f"slot {slot} ignored; OCR={header[:100]}")
-            continue
-        click("set_max")
-        time.sleep(1.25)
-        click("purchase")
-        log("jester", f"purchase attempted: {matched.title()}")
-    time.sleep(2)
-    close_roblox()
-
-
 class Dashboard(tk.Tk):
+    BG = "#080914"
+    PANEL = "#10111f"
+    CARD = "#121321"
+    BORDER = "#2d2942"
+    PURPLE = "#bd7cff"
+    TEXT = "#f2effa"
+    MUTED = "#a6a1b5"
+
     def __init__(self):
         super().__init__()
         self.title("Monarchy — Windows Edition")
-        self.geometry("920x620")
-        self.minsize(760, 520)
-        self.configure(bg="#090817")
+        self.geometry("1240x780")
+        self.minsize(980, 650)
+        self.configure(bg=self.BG)
         self.server = MonarchyServer(lambda: self.after(0, self.refresh))
-        self.settings = load_settings()
-        self.mode_var = tk.StringVar(value=self.settings["mode"])
-        self.jester_var = tk.BooleanVar(value=bool(self.settings["jester_enabled"]))
         self.status_var = tk.StringVar()
-        self.channel_var = tk.StringVar()
+        self.status_help_var = tk.StringVar()
+        self.target_var = tk.StringVar(value="Current channel")
+        self.detection_var = tk.StringVar(value="Unsupported")
+        self.detection_detail_var = tk.StringVar(value="Listener is stopped.")
+        self.runtime_var = tk.StringVar(value="00:00:00")
+        self.listener_started_at = None
         self.available_update = None
+        self.nav_buttons = {}
+        self.pages = {}
         self.build_ui()
+        self.show_page("Dashboard")
         self.refresh()
         self.after(1000, self.periodic)
         self.after(1500, self.check_for_updates)
@@ -754,45 +643,178 @@ class Dashboard(tk.Tk):
     def build_ui(self):
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure("TFrame", background="#090817")
-        style.configure("TLabel", background="#090817", foreground="#eeeaff", font=("Segoe UI", 11))
-        style.configure("Title.TLabel", font=("Segoe UI Semibold", 27), foreground="#b9a7ff")
-        root = ttk.Frame(self, padding=28)
-        root.pack(fill="both", expand=True)
-        title_row = ttk.Frame(root)
-        title_row.pack(anchor="w")
-        ttk.Label(title_row, text="MONARCHY", style="Title.TLabel").pack(side="left")
-        ttk.Label(title_row, text="♛", style="Title.TLabel",
-                  font=("Segoe UI Symbol", 21)).pack(side="left", padx=(9, 0), pady=(4, 0))
-        ttk.Label(root, text=f"Sol's RNG autosniper • Windows Edition • v{APP_VERSION}").pack(anchor="w", pady=(0, 12))
-        self.update_banner = ttk.Frame(root, padding=10)
-        self.update_text = ttk.Label(self.update_banner, text="")
+        style.configure("TFrame", background=self.BG)
+        style.configure("TLabel", background=self.BG, foreground=self.TEXT, font=("Segoe UI", 10))
+
+        header = tk.Frame(self, bg=self.BG, height=142, highlightbackground="#252337", highlightthickness=0)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        try:
+            from PIL import Image, ImageTk
+            logo = Image.open(APP_DIR / "assets" / "header.png")
+            self.logo_image = ImageTk.PhotoImage(logo)
+            tk.Label(header, image=self.logo_image, bg=self.BG, bd=0).pack(anchor="w", padx=28, pady=(21, 0))
+        except Exception:
+            tk.Label(header, text="♛  Monarchy", bg=self.BG, fg=self.PURPLE,
+                     font=("Georgia", 34, "bold")).pack(anchor="w", padx=28, pady=(24, 0))
+        tk.Label(header, text=f"Autosniper for Sol's RNG.  •  Windows Edition  •  v{APP_VERSION}",
+                 bg=self.BG, fg=self.MUTED, font=("Segoe UI", 11)).pack(anchor="w", padx=112, pady=(2, 14))
+        tk.Frame(self, bg="#29243f", height=1).pack(fill="x")
+
+        self.update_banner = tk.Frame(self, bg="#26203c", padx=18, pady=9)
+        self.update_text = tk.Label(self.update_banner, text="", bg="#26203c", fg=self.TEXT,
+                                    font=("Segoe UI Semibold", 10))
         self.update_text.pack(side="left")
-        self.update_button = ttk.Button(self.update_banner, text="Install", command=self.install_update)
-        self.update_button.pack(side="right", padx=(18, 0))
-        card = ttk.Frame(root, padding=18)
-        card.pack(fill="x")
-        ttk.Label(card, textvariable=self.status_var, font=("Segoe UI Semibold", 15)).grid(row=0, column=0, sticky="w")
-        ttk.Label(card, textvariable=self.channel_var).grid(row=1, column=0, sticky="w", pady=(5, 12))
-        ttk.Button(card, text="Start", command=self.server.start).grid(row=2, column=0, sticky="w")
-        ttk.Button(card, text="Stop", command=self.server.stop).grid(row=2, column=1, sticky="w", padx=8)
-        options = ttk.LabelFrame(root, text=" Settings ", padding=16)
-        options.pack(fill="x", pady=20)
-        ttk.Label(options, text="Mode").grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(options, text="Biome", value="BIOME", variable=self.mode_var,
-                        command=self.save).grid(row=0, column=1, padx=8)
-        ttk.Radiobutton(options, text="Jester", value="JESTER", variable=self.mode_var,
-                        command=self.save).grid(row=0, column=2, padx=8)
-        ttk.Checkbutton(options, text="Enable calibrated Jester automation",
-                        variable=self.jester_var, command=self.toggle_jester).grid(row=1, column=0, columnspan=3,
-                                                                                  sticky="w", pady=12)
-        ttk.Button(options, text="Open data folder", command=lambda: os.startfile(DATA_DIR)).grid(row=2, column=0, sticky="w")
-        ttk.Button(options, text="Open extension folder", command=lambda: os.startfile(APP_DIR / "extension")).grid(row=2, column=1, columnspan=2, sticky="w", padx=8)
-        ttk.Button(options, text="Calibrate Jester", command=self.open_calibration).grid(row=3, column=0, sticky="w", pady=(10, 0))
-        ttk.Label(root, text="Recent activity").pack(anchor="w")
-        self.logs = tk.Text(root, height=12, bg="#111027", fg="#d9d4f5", insertbackground="white",
-                            relief="flat", font=("Cascadia Mono", 9), state="disabled")
-        self.logs.pack(fill="both", expand=True, pady=(6, 0))
+        self.update_button = tk.Button(self.update_banner, text="Install", command=self.install_update,
+                                       bg="#b8dedd", fg="#071111", activebackground="#d0eeee",
+                                       relief="flat", padx=22, pady=4, font=("Segoe UI Semibold", 9))
+        self.update_button.pack(side="right")
+
+        self.body = tk.Frame(self, bg=self.BG)
+        self.body.pack(fill="both", expand=True)
+        sidebar = tk.Frame(self.body, bg="#0d0e1b", width=190,
+                           highlightbackground=self.BORDER, highlightthickness=1)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+        for name in ("Dashboard", "Biomes", "Settings", "Logs"):
+            button = tk.Button(sidebar, text=f"☆  {name}", anchor="w", command=lambda page=name: self.show_page(page),
+                               bg="#0d0e1b", fg=self.MUTED, activebackground="#241b3c",
+                               activeforeground=self.TEXT, relief="flat", bd=0, padx=22, pady=14,
+                               font=("Segoe UI Semibold", 11), cursor="hand2")
+            button.pack(fill="x", padx=10, pady=(10 if name == "Dashboard" else 2, 0))
+            self.nav_buttons[name] = button
+
+        self.content = tk.Frame(self.body, bg=self.BG)
+        self.content.pack(side="left", fill="both", expand=True, padx=16, pady=14)
+        self.pages["Dashboard"] = self.build_dashboard_page()
+        self.pages["Biomes"] = self.build_biomes_page()
+        self.pages["Settings"] = self.build_settings_page()
+        self.pages["Logs"] = self.build_logs_page()
+
+    def card(self, parent, **pack_options):
+        frame = tk.Frame(parent, bg=self.CARD, highlightbackground=self.BORDER, highlightthickness=1,
+                         padx=16, pady=14)
+        frame.pack(**pack_options)
+        return frame
+
+    def heading(self, parent, text, size=20):
+        return tk.Label(parent, text=text, bg=parent.cget("bg"), fg=self.TEXT,
+                        font=("Segoe UI Semibold", size))
+
+    def build_dashboard_page(self):
+        page = tk.Frame(self.content, bg=self.BG)
+        center = tk.Frame(page, bg=self.BG)
+        center.pack(side="left", fill="both", expand=True)
+        status = self.card(center, fill="x", pady=(0, 14))
+        tk.Label(status, text="STATUS", bg=self.CARD, fg=self.MUTED,
+                 font=("Segoe UI Semibold", 9)).grid(row=0, column=0, sticky="w")
+        tk.Label(status, textvariable=self.status_var, bg=self.CARD, fg=self.TEXT,
+                 font=("Segoe UI Semibold", 21)).grid(row=1, column=0, sticky="w")
+        tk.Label(status, textvariable=self.status_help_var, bg=self.CARD, fg=self.MUTED,
+                 font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w")
+        status.grid_columnconfigure(0, weight=1)
+        tk.Button(status, text="▶  Start", command=self.start_listener, bg="#115633", fg="#d4ffe6",
+                  activebackground="#177546", relief="flat", padx=34, pady=14,
+                  font=("Segoe UI Semibold", 12)).grid(row=0, column=1, rowspan=3, padx=(15, 8))
+        tk.Button(status, text="■  Stop", command=self.stop_listener, bg="#5b1b2f", fg="#ffd9e2",
+                  activebackground="#76253e", relief="flat", padx=34, pady=14,
+                  font=("Segoe UI Semibold", 12)).grid(row=0, column=2, rowspan=3)
+
+        target = self.card(center, fill="x", pady=(0, 14))
+        tk.Label(target, text="CURRENT TARGET", bg=self.CARD, fg=self.MUTED,
+                 font=("Segoe UI Semibold", 9)).pack(anchor="w")
+        tk.Label(target, textvariable=self.target_var, bg=self.CARD, fg=self.PURPLE,
+                 font=("Segoe UI Semibold", 18)).pack(anchor="w", pady=(6, 2))
+        tk.Label(target, text="DISCORD CHANNEL DETECTION", bg=self.CARD, fg=self.MUTED,
+                 font=("Segoe UI Semibold", 9)).pack(anchor="w", pady=(10, 0))
+        tk.Label(target, textvariable=self.detection_var, bg=self.CARD, fg=self.PURPLE,
+                 font=("Segoe UI Semibold", 12)).pack(anchor="w", pady=(5, 0))
+        tk.Label(target, textvariable=self.detection_detail_var, bg=self.CARD, fg=self.MUTED,
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 0))
+
+        runtime = self.card(center, fill="x")
+        tk.Label(runtime, textvariable=self.runtime_var, bg=self.CARD, fg=self.TEXT,
+                 font=("Segoe UI Semibold", 18)).pack()
+        tk.Label(runtime, text="Runtime", bg=self.CARD, fg=self.MUTED,
+                 font=("Segoe UI", 9)).pack()
+
+        art_frame = tk.Frame(page, bg=self.BG, width=244)
+        art_frame.pack(side="right", fill="y", padx=(16, 0))
+        art_frame.pack_propagate(False)
+        try:
+            from PIL import Image, ImageTk
+            art = Image.open(APP_DIR / "assets" / "throne-panel.png")
+            art.thumbnail((230, 520), Image.Resampling.LANCZOS)
+            self.throne_image = ImageTk.PhotoImage(art)
+            tk.Label(art_frame, image=self.throne_image, bg=self.BG, bd=0).pack(anchor="n")
+        except Exception:
+            tk.Label(art_frame, text="♛\n\nAll hail the\nPixelatingStars.", bg=self.CARD,
+                     fg=self.PURPLE, font=("Georgia", 18), justify="center", padx=20, pady=80).pack(fill="both")
+        return page
+
+    def build_biomes_page(self):
+        page = tk.Frame(self.content, bg=self.BG)
+        self.heading(page, "Biomes").pack(anchor="w")
+        tk.Label(page, text="Monarchy selects the target from the Discord channel currently visible.",
+                 bg=self.BG, fg=self.MUTED, font=("Segoe UI", 9)).pack(anchor="w", pady=(5, 8))
+        tk.Label(page, text="ACTIVE — biome links only", bg=self.BG, fg=self.PURPLE,
+                 font=("Segoe UI Semibold", 17)).pack(anchor="w", pady=(0, 12))
+        banner = tk.Frame(page, bg="#115633", padx=14, pady=14)
+        banner.pack(fill="x", pady=(0, 12))
+        tk.Label(banner, text="Biome Sniper", bg="#115633", fg="#d4ffe6",
+                 font=("Segoe UI Semibold", 12)).pack()
+        for biome in ("Corruption", "Dreamspace", "Glitch", "Cyberspace", "Singularity", "Hell"):
+            row = tk.Frame(page, bg=self.CARD, highlightbackground=self.BORDER, highlightthickness=1,
+                           padx=14, pady=12)
+            row.pack(fill="x", pady=4)
+            tk.Label(row, text=f"✦  {biome}", bg=self.CARD, fg=self.TEXT,
+                     font=("Segoe UI", 10)).pack(anchor="w")
+        return page
+
+    def build_settings_page(self):
+        page = tk.Frame(self.content, bg=self.BG)
+        self.heading(page, "Settings").pack(anchor="w")
+        tk.Label(page, text="Biome-only Windows Edition", bg=self.BG, fg=self.MUTED,
+                 font=("Segoe UI", 10)).pack(anchor="w", pady=(4, 18))
+        panel = self.card(page, fill="x")
+        tk.Label(panel, text="Local files", bg=self.CARD, fg=self.TEXT,
+                 font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 12))
+        tk.Button(panel, text="Open data folder", command=lambda: os.startfile(DATA_DIR),
+                  bg="#28253a", fg=self.TEXT, activebackground="#39334f", relief="flat",
+                  padx=18, pady=9).pack(side="left")
+        tk.Button(panel, text="Open browser extension folder", command=lambda: os.startfile(APP_DIR / "extension"),
+                  bg="#28253a", fg=self.TEXT, activebackground="#39334f", relief="flat",
+                  padx=18, pady=9).pack(side="left", padx=10)
+        return page
+
+    def build_logs_page(self):
+        page = tk.Frame(self.content, bg=self.BG)
+        self.heading(page, "Activity Logs").pack(anchor="w", pady=(0, 10))
+        self.logs = tk.Text(page, bg="#0b0c18", fg="#d9d4e7", insertbackground="white",
+                            highlightbackground=self.BORDER, highlightthickness=1, relief="flat",
+                            font=("Cascadia Mono", 9), state="disabled", padx=10, pady=8)
+        self.logs.pack(fill="both", expand=True)
+        return page
+
+    def show_page(self, name):
+        for page in self.pages.values():
+            page.pack_forget()
+        self.pages[name].pack(fill="both", expand=True)
+        for label, button in self.nav_buttons.items():
+            selected = label == name
+            button.configure(bg="#241b3c" if selected else "#0d0e1b",
+                             fg=self.TEXT if selected else self.MUTED)
+
+    def start_listener(self):
+        self.server.start()
+        if self.listener_started_at is None:
+            self.listener_started_at = time.monotonic()
+        self.refresh()
+
+    def stop_listener(self):
+        self.server.stop()
+        self.listener_started_at = None
+        self.refresh()
 
     def check_for_updates(self):
         def worker():
@@ -812,7 +834,7 @@ class Dashboard(tk.Tk):
     def show_update(self, update):
         self.available_update = update
         self.update_text.configure(text=f"Update available: v{update['version']}")
-        self.update_banner.pack(fill="x", pady=(0, 12), before=self.update_banner.master.winfo_children()[3])
+        self.update_banner.pack(fill="x", before=self.body)
 
     def install_update(self):
         if not self.available_update:
@@ -847,75 +869,32 @@ class Dashboard(tk.Tk):
         log("update", f"installing v{self.available_update['version']}; restarting")
         self.destroy()
 
-    def save(self):
-        self.settings["mode"] = self.mode_var.get()
-        self.settings["jester_enabled"] = self.jester_var.get()
-        save_settings(self.settings)
-        self.refresh()
-
-    def toggle_jester(self):
-        if self.jester_var.get():
-            answer = messagebox.askyesno("Enable Jester automation?",
-                "This sends mouse and keyboard input to Roblox. Enable it only after verifying the 1920x1080 calibration. Continue?")
-            if not answer:
-                self.jester_var.set(False)
-        self.save()
-
-    def open_calibration(self):
-        window = roblox_window()
-        if not window:
-            messagebox.showerror("Calibration", "Open Roblox in a 1920x1080 window first.")
-            return
-        dialog = tk.Toplevel(self)
-        dialog.title("Jester calibration")
-        dialog.geometry("560x520")
-        frame = ttk.Frame(dialog, padding=16)
-        frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="Open the relevant Roblox screen, then click Capture. You have three seconds to place the pointer over the named control.", wraplength=520).pack(anchor="w", pady=(0, 10))
-        canvas = tk.Canvas(frame, bg="#090817", highlightthickness=0)
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-        rows = ttk.Frame(canvas)
-        rows.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=rows, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        def capture(name, label):
-            label.configure(text="Move pointer now…")
-            dialog.update_idletasks()
-            def worker():
-                time.sleep(3)
-                import pyautogui
-                live = roblox_window()
-                if not live:
-                    self.after(0, lambda: label.configure(text="Roblox not found"))
-                    return
-                _, x, y, width, height = live
-                px, py = pyautogui.position()
-                rx = round((px - x) * 1920 / width)
-                ry = round((py - y) * 1080 / height)
-                if not (0 <= rx <= 1920 and 0 <= ry <= 1080):
-                    self.after(0, lambda: label.configure(text="Pointer was outside Roblox"))
-                    return
-                self.settings["points"][name] = [rx, ry]
-                save_settings(self.settings)
-                self.after(0, lambda: label.configure(text=f"Saved {rx}, {ry}"))
-            threading.Thread(target=worker, daemon=True).start()
-
-        for row, name in enumerate(self.settings["points"]):
-            ttk.Label(rows, text=name.replace("_", " ").title(), width=24).grid(row=row, column=0, sticky="w", pady=3)
-            status = ttk.Label(rows, text=str(self.settings["points"][name]), width=18)
-            status.grid(row=row, column=1, sticky="w")
-            ttk.Button(rows, text="Capture", command=lambda n=name, s=status: capture(n, s)).grid(row=row, column=2)
-
     def refresh(self):
-        self.status_var.set("Listener running" if self.server.httpd else "Listener stopped")
+        running = bool(self.server.httpd)
+        self.status_var.set("Running" if running else "Stopped")
+        self.status_help_var.set("Watching Discord for biome links." if running else "Press Start to begin autosniping.")
         try:
             state = json.loads(CHANNEL_FILE.read_text(encoding="utf-8"))
-            self.channel_var.set(f"Discord: {state['name']} • {'MATCHED' if state['matchesMode'] else 'BLOCKED'}")
+            if running:
+                name = str(state.get("name", "UNSUPPORTED"))
+                matched = bool(state.get("matchesMode"))
+                self.target_var.set(name.replace("-", " ").title() if matched else "Current channel")
+                self.detection_var.set(name.replace("-", " ").title())
+                self.detection_detail_var.set("MATCHED — ready for biome links" if matched else
+                                              "BLOCKED — this channel is not a supported biome channel")
+            else:
+                self.target_var.set("Current channel")
+                self.detection_var.set("Unsupported")
+                self.detection_detail_var.set("Listener is stopped.")
         except Exception:
-            self.channel_var.set("Discord: waiting for desktop app or browser extension")
+            self.target_var.set("Current channel")
+            self.detection_var.set("Waiting for Discord" if running else "Unsupported")
+            self.detection_detail_var.set("Open a supported channel in Discord." if running else "Listener is stopped.")
+        if running and self.listener_started_at is not None:
+            elapsed = max(0, int(time.monotonic() - self.listener_started_at))
+            self.runtime_var.set(f"{elapsed // 3600:02d}:{elapsed % 3600 // 60:02d}:{elapsed % 60:02d}")
+        else:
+            self.runtime_var.set("00:00:00")
         try:
             lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-80:]
         except OSError:

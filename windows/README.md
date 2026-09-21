@@ -3,8 +3,7 @@
 This is the Windows Edition of Monarchy. It receives supported Sol's RNG
 server links from either the Windows Discord desktop app or the included
 Chromium extension, launches them with the installed Roblox client, monitors
-biome sessions, and can run the guarded Jester workflow after per-PC
-calibration.
+biome sessions, and closes Roblox when the target biome ends.
 
 ## Requirements
 
@@ -78,18 +77,13 @@ from public GitHub releases and do not use credentials.
 
 ## Safety and limitations
 
-- Jester automation defaults to disabled. Use **Calibrate Jester** for every
-  listed control before enabling it.
 - Play activation verifies Roblox has foreground focus before sending UI
   Navigation keys. Recent activity records the focus result and every key. A
   `Windows did not give foreground focus to Roblox` failure means another app
   or Windows focus policy retained keyboard input; Monarchy does not send the
   sequence blindly in that state.
-- Item selection is OCR-verified and fails closed before pressing Use.
-- Only Lucky Potion, Speed Potion, Heavenly Potion, and Potion of Bound can be
-  purchased.
-- Fish Macro and biome-item automation are not yet included in this Windows
-  preview.
-- Display scaling and Roblox UI changes can invalidate coordinates. Keep
-  Windows scaling at 100% and recalibrate after layout changes.
+- Shop automation, fishing, and biome-item automation are intentionally not
+  included in the current biome-focused Windows Edition.
+- Display scaling and Roblox UI changes can affect OCR. Keep Windows scaling at
+  100% while troubleshooting Play or Roll detection.
 - Game automation may carry account-enforcement risk. Use it at your own risk.

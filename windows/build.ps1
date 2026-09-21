@@ -33,6 +33,7 @@ if (-not (Test-Path (Join-Path $Tesseract "tesseract.exe"))) {
 Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
 & .\.venv\Scripts\pyinstaller.exe --noconfirm --clean --windowed --name Monarchy `
     --add-data "extension;extension" `
+    --add-data "assets;assets" `
     --collect-all winotify monarchy.py
 
 $Internal = Join-Path $PSScriptRoot "dist\Monarchy\_internal"
@@ -50,6 +51,7 @@ $Portable = Join-Path $PSScriptRoot "dist\Monarchy-Windows-Portable"
 New-Item -ItemType Directory -Force $Portable | Out-Null
 Copy-Item -Recurse -Force .\dist\Monarchy\* $Portable
 Copy-Item -Recurse -Force .\extension (Join-Path $Portable "extension")
+Copy-Item -Recurse -Force .\assets (Join-Path $Portable "assets")
 Copy-Item -Recurse -Force $Tesseract (Join-Path $Portable "tesseract")
 Copy-Item -Force .\README.md $Portable
 New-Item -ItemType Directory -Force (Join-Path $Portable "data") | Out-Null

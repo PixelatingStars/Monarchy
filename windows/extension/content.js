@@ -12,7 +12,6 @@
     const selected = [...document.querySelectorAll('a[aria-current="page"][href*="/channels/"]')]
       .map(node => node.textContent || node.getAttribute("aria-label") || "").find(text => text.trim());
     const source = (selected || document.title || "").toUpperCase();
-    if (source.includes("JESTER")) return {name: "JESTER", kind: "JESTER"};
     if (source.includes("BIOME-SPAWNER")) return {name: "BIOME-SPAWNER", kind: "BIOME"};
     for (const biome of approved) {
       if (source.includes(biome) || (biome === "GLITCH" && source.includes("GLITCHED"))) {

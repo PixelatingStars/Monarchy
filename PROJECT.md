@@ -13,8 +13,8 @@ A separate Windows Edition now lives in
 runtime state with the installed Omarchy edition. It provides a Tkinter
 dashboard, Chromium extension, native Roblox protocol launching, Windows
 process/window/input support, bundled-build support, Rich Presence biome
-monitoring, and a fail-closed calibrated Jester workflow. Fish Macro and
-biome-item automation have not yet been ported to Windows.
+monitoring, and a biome-only workflow. Shop automation, Fish Macro, and
+biome-item automation are intentionally deferred on Windows.
 
 Windows v0.3.0 adds official Discord desktop-app monitoring through Microsoft
 UI Automation, with the Chromium extension retained as a fallback. It reads
@@ -22,7 +22,7 @@ only Discord's exposed accessibility names and selected-channel state; it does
 not extract credentials, inspect process memory, inject code, or modify the
 Discord client. The listener baselines links already visible when monitoring
 starts, then forwards only newly exposed supported links through the same
-validation, mode, deduplication, and Jester safety path used by the browser
+validation, biome classification, and deduplication path used by the browser
 extension. Channel identification fails closed when Discord exposes neither a
 supported channel in its window title nor a selected accessible channel.
 
@@ -30,7 +30,7 @@ After launching a Roblox server, the Windows edition focuses the Roblox window
 and uses Roblox UI Navigation (`backslash`, Down, Enter, `backslash`) to
 activate Play. It makes at most three attempts, eight seconds apart, and still
 requires OCR confirmation of the in-game Roll control within the existing
-90-second watchdog before biome or Jester automation proceeds.
+90-second watchdog before biome monitoring proceeds.
 
 Windows v0.3.1 hardens this step against Windows foreground-lock behavior. It
 temporarily attaches the Monarchy thread to the Roblox and current foreground
@@ -52,6 +52,14 @@ files only after the running process exits, and restarts Monarchy. Public
 releases need no credentials. Windows v0.3.3 removes the former authenticated
 update option, its settings UI, and all credential-handling code. Automatic
 updates now support public GitHub releases only.
+
+Windows v0.3.4 removes the deferred Jester mode, purchasing workflow,
+calibration controls, target-item settings, and Jester channel classification.
+The Windows app is biome-only. Its dashboard is redesigned to closely mirror
+the Omarchy edition with the existing Monarchy header and crown-panel artwork,
+a dark purple sidebar, Dashboard/Biomes/Settings/Logs pages, status and target
+cards, a supported-biome list, runtime, and activity logs. Fish and Jester pages
+remain intentionally absent until those features are ported later.
 
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow

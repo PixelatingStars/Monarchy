@@ -47,15 +47,13 @@ class LinkParsingTests(unittest.TestCase):
 
 
 class SettingsTests(unittest.TestCase):
-    def test_defaults_are_merged(self):
+    def test_obsolete_workflow_settings_are_ignored(self):
         with tempfile.TemporaryDirectory() as directory:
             settings_file = Path(directory) / "settings.json"
-            settings_file.write_text('{"mode":"JESTER","points":{"inventory":[1,2]}}')
+            settings_file.write_text('{"mode":"OLD","points":{"inventory":[1,2]}}')
             with patch.object(monarchy, "DATA_DIR", Path(directory)), patch.object(monarchy, "SETTINGS_FILE", settings_file):
                 settings = monarchy.load_settings()
-            self.assertEqual(settings["mode"], "JESTER")
-            self.assertEqual(settings["points"]["inventory"], [1, 2])
-            self.assertIn("purchase", settings["points"])
+            self.assertEqual(settings, {"close_roblox_on_stop": True})
 
 
 class UpdateTests(unittest.TestCase):

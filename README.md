@@ -1,2 +1,2 @@
 # Monarchy
-monarchy testing
+Autosniper for Sol's RNG.

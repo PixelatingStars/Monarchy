@@ -24,12 +24,11 @@ from datetime import datetime
 from difflib import SequenceMatcher
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.3.3"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
-UPDATE_CREDENTIAL = "Monarchy/GitHubUpdates"
 PLACE_ID = "15532962292"
 PORT = 17381
 BIOMES = {"CORRUPTION", "DREAMSPACE", "GLITCH", "CYBERSPACE", "SINGULARITY", "HELL"}
@@ -58,49 +57,9 @@ DEFAULT_SETTINGS = {
 }
 
 
-def github_token() -> str:
-    """Read the private-release token without placing it in portable data."""
-    try:
-        import win32cred
-        value = win32cred.CredRead(UPDATE_CREDENTIAL, win32cred.CRED_TYPE_GENERIC)["CredentialBlob"]
-        return value.decode("utf-16-le") if isinstance(value, bytes) else str(value)
-    except Exception:
-        return ""
-
-
-def save_github_token(token: str) -> None:
-    import win32cred
-    win32cred.CredWrite({
-        "Type": win32cred.CRED_TYPE_GENERIC,
-        "TargetName": UPDATE_CREDENTIAL,
-        "UserName": "PixelatingStars",
-        "CredentialBlob": token,
-        "Persist": win32cred.CRED_PERSIST_LOCAL_MACHINE,
-    }, 0)
-
-
-def validate_github_token(token: str) -> str:
-    """Confirm a token belongs to the owner and can see Monarchy releases."""
-    headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}",
-               "User-Agent": f"Monarchy/{APP_VERSION}", "X-GitHub-Api-Version": "2022-11-28"}
-    with urllib.request.urlopen(urllib.request.Request("https://api.github.com/user", headers=headers),
-                               timeout=10) as response:
-        account = json.load(response)
-    login = str(account.get("login", ""))
-    if login.casefold() != "PixelatingStars".casefold():
-        raise ValueError(f"token belongs to {login or 'an unknown account'}, not PixelatingStars")
-    with urllib.request.urlopen(urllib.request.Request(f"{GITHUB_API}/releases/latest", headers=headers),
-                               timeout=10) as response:
-        json.load(response)
-    return login
-
-
 def github_request(url: str, accept="application/vnd.github+json"):
     headers = {"Accept": accept, "User-Agent": f"Monarchy/{APP_VERSION}",
                "X-GitHub-Api-Version": "2022-11-28"}
-    token = github_token()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
     return urllib.request.Request(url, headers=headers)
 
 
@@ -785,9 +744,6 @@ class Dashboard(tk.Tk):
         self.jester_var = tk.BooleanVar(value=bool(self.settings["jester_enabled"]))
         self.status_var = tk.StringVar()
         self.channel_var = tk.StringVar()
-        self.private_update_var = tk.StringVar(
-            value="Private updates: connected" if github_token() else "Private updates: not connected"
-        )
         self.available_update = None
         self.build_ui()
         self.refresh()
@@ -833,57 +789,10 @@ class Dashboard(tk.Tk):
         ttk.Button(options, text="Open data folder", command=lambda: os.startfile(DATA_DIR)).grid(row=2, column=0, sticky="w")
         ttk.Button(options, text="Open extension folder", command=lambda: os.startfile(APP_DIR / "extension")).grid(row=2, column=1, columnspan=2, sticky="w", padx=8)
         ttk.Button(options, text="Calibrate Jester", command=self.open_calibration).grid(row=3, column=0, sticky="w", pady=(10, 0))
-        private_update_label = "Reconnect private updates" if github_token() else "Connect private updates"
-        self.private_update_button = ttk.Button(options, text=private_update_label,
-                                                command=self.connect_private_updates)
-        self.private_update_button.grid(row=3, column=1, sticky="w", padx=8, pady=(10, 0))
-        ttk.Label(options, textvariable=self.private_update_var).grid(row=3, column=2, sticky="w", pady=(10, 0))
         ttk.Label(root, text="Recent activity").pack(anchor="w")
         self.logs = tk.Text(root, height=12, bg="#111027", fg="#d9d4f5", insertbackground="white",
                             relief="flat", font=("Cascadia Mono", 9), state="disabled")
         self.logs.pack(fill="both", expand=True, pady=(6, 0))
-
-    def connect_private_updates(self):
-        token = simpledialog.askstring(
-            "Connect private updates",
-            "Paste a fine-grained GitHub token for PixelatingStars/Monarchy.\n"
-            "It needs read-only Contents access and will be saved in Windows Credential Manager.",
-            show="•", parent=self,
-        )
-        if not token or not token.strip():
-            return
-        token = token.strip()
-        self.private_update_button.configure(state="disabled")
-        self.private_update_var.set("Private updates: checking…")
-
-        def worker():
-            try:
-                login = validate_github_token(token)
-                save_github_token(token)
-            except urllib.error.HTTPError as error:
-                detail = f"GitHub rejected the credential (HTTP {error.code})."
-                self.after(0, lambda message=detail: self.private_update_failed(message))
-                return
-            except Exception as error:
-                detail = f"Could not connect private updates: {error}"
-                self.after(0, lambda message=detail: self.private_update_failed(message))
-                return
-            self.after(0, lambda: self.private_update_connected(login))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def private_update_connected(self, login):
-        self.private_update_button.configure(state="normal", text="Reconnect private updates")
-        self.private_update_var.set(f"Private updates: connected as {login}")
-        messagebox.showinfo(
-            "Private updates connected",
-            "The credential is saved in Windows Credential Manager. Monarchy can keep updating after the repository is private.",
-        )
-
-    def private_update_failed(self, error):
-        self.private_update_button.configure(state="normal")
-        self.private_update_var.set("Private updates: not connected")
-        messagebox.showerror("Private updates", error)
 
     def check_for_updates(self):
         def worker():

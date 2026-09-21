@@ -13,12 +13,10 @@ except ImportError:
     tkinter_stub = types.ModuleType("tkinter")
     tkinter_stub.Tk = object
     tkinter_stub.messagebox = types.SimpleNamespace()
-    tkinter_stub.simpledialog = types.SimpleNamespace()
     tkinter_stub.ttk = types.SimpleNamespace()
     sys.modules["tkinter"] = tkinter_stub
     sys.modules["tkinter.ttk"] = tkinter_stub.ttk
     sys.modules["tkinter.messagebox"] = tkinter_stub.messagebox
-    sys.modules["tkinter.simpledialog"] = tkinter_stub.simpledialog
 
 import monarchy
 

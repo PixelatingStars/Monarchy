@@ -73,20 +73,8 @@ a release.
 
 Portable builds show an update banner, verify the downloaded ZIP against the
 published SHA-256 file, preserve the local `data` directory, replace program
-files after Monarchy exits, and restart automatically. Public releases require
-no credentials. Private releases require a read-only GitHub credential stored
-locally in Windows Credential Manager; never embed a token in a build.
-
-### Moving the repository to private
-
-Install v0.2.2 while the repository is still public, then create a fine-grained
-personal access token on GitHub for the `PixelatingStars` owner. Limit repository
-access to `Monarchy` and grant only read-only **Contents** permission (Metadata
-read access is added automatically). In Monarchy, choose **Connect private
-updates**, paste the token, and wait for the connected confirmation before
-changing the repository visibility. Monarchy validates the account and release
-access before saving the token in Windows Credential Manager under
-`Monarchy/GitHubUpdates`. Never send or publish the token.
+files after Monarchy exits, and restart automatically. Updates are downloaded
+from public GitHub releases and do not use credentials.
 
 ## Safety and limitations
 

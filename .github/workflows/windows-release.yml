@@ -1,0 +1,62 @@
+name: Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tesseract
+        shell: powershell
+        run: choco install tesseract --yes --no-progress
+
+      - name: Verify release version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: powershell
+        run: |
+          $Tag = "${{ github.ref_name }}"
+          $Match = Select-String -Path .\monarchy.py -Pattern '^APP_VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"$'
+          if (-not $Match) { throw "APP_VERSION was not found." }
+          $Version = $Match.Matches[0].Groups[1].Value
+          if ($Tag -ne "v$Version") { throw "Tag $Tag does not match APP_VERSION $Version." }
+
+      - name: Build portable package
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File .\build.ps1
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Monarchy-Windows-Portable
+          path: |
+            windows/dist/Monarchy-Windows-Portable.zip
+            windows/dist/Monarchy-Windows-Portable.zip.sha256
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $Tag = "${{ github.ref_name }}"
+          gh release create $Tag --title "Monarchy $Tag" --generate-notes
+          gh release upload $Tag .\dist\Monarchy-Windows-Portable.zip .\dist\Monarchy-Windows-Portable.zip.sha256 --clobber

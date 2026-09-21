@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Monarchy for Windows 11.
+"""Monarchy for Windows Edition.
 
 Portable local listener, dashboard, Roblox launcher, biome watcher, and guarded
 Jester buyer. Windows-only integrations are imported lazily so the source can
@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, simpledialog, ttk
 
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 UPDATE_CREDENTIAL = "Monarchy/GitHubUpdates"
@@ -775,7 +775,7 @@ def jester_workflow(_target):
 class Dashboard(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Monarchy — Windows 11")
+        self.title("Monarchy — Windows Edition")
         self.geometry("920x620")
         self.minsize(760, 520)
         self.configure(bg="#090817")
@@ -808,7 +808,7 @@ class Dashboard(tk.Tk):
         ttk.Label(title_row, text="MONARCHY", style="Title.TLabel").pack(side="left")
         ttk.Label(title_row, text="♛", style="Title.TLabel",
                   font=("Segoe UI Symbol", 21)).pack(side="left", padx=(9, 0), pady=(4, 0))
-        ttk.Label(root, text=f"Sol's RNG autosniper • Windows 11 preview • v{APP_VERSION}").pack(anchor="w", pady=(0, 12))
+        ttk.Label(root, text=f"Sol's RNG autosniper • Windows Edition • v{APP_VERSION}").pack(anchor="w", pady=(0, 12))
         self.update_banner = ttk.Frame(root, padding=10)
         self.update_text = ttk.Label(self.update_banner, text="")
         self.update_text.pack(side="left")
@@ -1031,6 +1031,6 @@ class Dashboard(tk.Tk):
 
 if __name__ == "__main__":
     if os.name != "nt":
-        print("Monarchy Windows requires Windows 11.", file=sys.stderr)
+        print("Monarchy Windows requires Windows Edition.", file=sys.stderr)
         raise SystemExit(1)
     Dashboard().mainloop()

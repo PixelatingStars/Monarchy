@@ -8,7 +8,7 @@ Monarchy is a local Sol's RNG autosniper for Omarchy Linux. It watches server
 links in the selected Radiant Notifier Discord channel, joins through Sober,
 and runs either a biome monitor or a selective Jester-shop buyer.
 
-A separate Windows 11 preview now lives in
+A separate Windows Edition now lives in
 `/home/pixelatingstars/Work/Monarchy/windows`. It does not modify or share
 runtime state with the installed Omarchy edition. It provides a Tkinter
 dashboard, Chromium extension, native Roblox protocol launching, Windows
@@ -38,6 +38,11 @@ input queues, restores and raises Roblox, requests keyboard focus, then verifies
 Roblox is truly foreground before sending any navigation keys. Each key is
 logged individually, and an unsuccessful focus handoff is reported as a failed
 attempt rather than silently claiming input was sent.
+
+Windows v0.3.2 standardizes the platform branding throughout the Windows
+source, dashboard, runtime messages, and documentation as `Windows Edition`.
+The dashboard subtitle is now
+`Sol's RNG autosniper • Windows Edition` followed by the app version.
 
 The Windows portable dashboard is versioned and checks the latest GitHub
 release at `PixelatingStars/Monarchy` on startup. Newer semantic-version tags

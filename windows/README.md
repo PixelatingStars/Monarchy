@@ -1,6 +1,6 @@
-# Monarchy for Windows 11
+# Monarchy for Windows Edition
 
-This is the Windows 11 edition of Monarchy. It receives supported Sol's RNG
+This is the Windows Edition of Monarchy. It receives supported Sol's RNG
 server links from either the Windows Discord desktop app or the included
 Chromium extension, launches them with the installed Roblox client, monitors
 biome sessions, and can run the guarded Jester workflow after per-PC
@@ -8,7 +8,7 @@ calibration.
 
 ## Requirements
 
-- Windows 11 (64-bit)
+- Windows Edition (64-bit)
 - The Roblox desktop client, already signed in
 - The Windows Discord desktop app, or Google Chrome/Chromium/Brave/Microsoft
   Edge with the unpacked `extension` folder loaded as a fallback

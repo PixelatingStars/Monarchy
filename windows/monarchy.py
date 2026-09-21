@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, simpledialog, ttk
 
-APP_VERSION = "0.2.2"
+APP_VERSION = "0.3.0"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 UPDATE_CREDENTIAL = "Monarchy/GitHubUpdates"
@@ -288,6 +288,65 @@ def discord_title_channel():
     return None
 
 
+def channel_from_text(text: str):
+    source = text.upper()
+    for label in ("JESTER", MIXED_CHANNEL, "CORRUPTION", "DREAMSPACE", "GLITCHED",
+                  "GLITCH", "CYBERSPACE", "SINGULARITY", "HELL"):
+        if label in source:
+            name = "GLITCH" if label == "GLITCHED" else label
+            return name, "JESTER" if name == "JESTER" else "BIOME"
+    return None
+
+
+def discord_desktop_snapshot():
+    """Return accessible Discord text and its selected channel, if exposed."""
+    from pywinauto import Desktop
+    messages = []
+    selected_channel = None
+    windows = Desktop(backend="uia").windows(title_re=r"(?i).*discord.*", visible_only=True)
+    for window in windows:
+        for control in window.descendants():
+            try:
+                text = (control.element_info.name or "").strip()
+            except Exception:
+                continue
+            if text and len(text) <= 8192:
+                messages.append(text)
+                try:
+                    properties = control.legacy_properties()
+                    value = str(properties.get("Value") or "").strip()
+                    if value and value != text and len(value) <= 8192:
+                        # Chromium exposes a hyperlink's destination here even
+                        # when its visible Discord label is shortened.
+                        messages.append(f"{text} {value}")
+                    if channel_from_text(text) and int(properties.get("State", 0)) & 2:
+                        selected_channel = channel_from_text(text) or selected_channel
+                except Exception:
+                    pass
+    return messages, selected_channel
+
+
+def discord_desktop_candidates(messages, channel):
+    """Extract supported links from individual accessibility message blocks."""
+    candidates = []
+    for text in messages:
+        parsed = parse_link(text)
+        if not parsed:
+            continue
+        requested = channel[0]
+        if requested == MIXED_CHANNEL:
+            upper = text.upper()
+            requested = next((biome for biome in BIOMES if biome in upper), "")
+            if "GLITCHED BIOME" in upper:
+                requested = "GLITCH"
+            if not requested:
+                continue
+        population = re.search(r"(?:^|\D)(\d{1,2})\s*/\s*20(?:\D|$)", text)
+        candidates.append({"url": text, "targetBiome": requested,
+                           "playerCount": int(population.group(1)) if population else None})
+    return candidates
+
+
 def roblox_window():
     try:
         import win32gui
@@ -397,6 +456,7 @@ class MonarchyServer:
         self.cooldown_until = 0.0
         self.lock = threading.Lock()
         self.channel = ("UNSUPPORTED", "UNSUPPORTED")
+        self.discord_desktop_seen = set()
 
     def mode(self):
         return str(load_settings().get("mode", "BIOME")).upper()
@@ -426,6 +486,75 @@ class MonarchyServer:
                 return False
             self.active = True
             return True
+
+    def submit_link(self, payload):
+        parsed = parse_link(str(payload.get("url", "")))
+        if not parsed:
+            return 400
+        link_id, uri = parsed
+        requested = str(payload.get("targetBiome", "")).upper()
+        channel, kind = self.channel
+        detected = discord_title_channel()
+        if detected:
+            channel, kind = detected
+        if channel == MIXED_CHANNEL and requested in BIOMES:
+            biome = requested
+        elif channel in BIOMES:
+            biome = channel
+        else:
+            biome = "CORRUPTION"
+        if kind == "UNSUPPORTED" or kind != self.mode():
+            log("listener", f"ignored link; channel={channel}, mode={self.mode()}")
+            return 204
+        if kind == "JESTER" and not load_settings().get("jester_enabled"):
+            log("listener", "ignored Jester link; Windows Jester automation is disabled")
+            return 204
+        if link_id in self.seen:
+            return 208
+        players = payload.get("playerCount")
+        candidate = (link_id, uri, biome, kind, players)
+        if self.can_start():
+            self.launch(candidate)
+            return 202
+        self.pending = candidate
+        log("listener", f"deferred active-session link {link_id}")
+        return 409
+
+    def discord_desktop_loop(self):
+        available_logged = False
+        initialized = False
+        while self.httpd:
+            try:
+                messages, selected = discord_desktop_snapshot()
+                detected = discord_title_channel() or selected
+                if not detected:
+                    time.sleep(1)
+                    continue
+                self.update_channel(*detected)
+                if not available_logged:
+                    log("discord", "Windows Discord accessibility monitoring active")
+                    available_logged = True
+                candidates = discord_desktop_candidates(messages, detected)
+                if not initialized:
+                    self.discord_desktop_seen.update(
+                        parsed[0] for payload in candidates if (parsed := parse_link(payload["url"]))
+                    )
+                    initialized = True
+                    log("discord", "desktop message baseline captured; watching for new links")
+                    time.sleep(0.75)
+                    continue
+                for payload in candidates:
+                    parsed = parse_link(payload["url"])
+                    if not parsed or parsed[0] in self.discord_desktop_seen:
+                        continue
+                    status = self.submit_link(payload)
+                    if status in (202, 208, 409):
+                        self.discord_desktop_seen.add(parsed[0])
+            except Exception as error:
+                if available_logged:
+                    log("discord", f"desktop monitoring unavailable: {error}")
+                    available_logged = False
+            time.sleep(0.75)
 
     def launch(self, candidate):
         link_id, uri, biome, kind, players = candidate
@@ -468,37 +597,10 @@ class MonarchyServer:
                         return self.finish_response(204)
                     if self.path != "/join":
                         return self.send_error(404)
-                    parsed = parse_link(str(payload.get("url", "")))
-                    if not parsed:
+                    status = owner.submit_link(payload)
+                    if status == 400:
                         return self.send_error(400)
-                    link_id, uri = parsed
-                    requested = str(payload.get("targetBiome", "")).upper()
-                    channel, kind = owner.channel
-                    detected = discord_title_channel()
-                    if detected:
-                        channel, kind = detected
-                    if channel == MIXED_CHANNEL and requested in BIOMES:
-                        biome = requested
-                    elif channel in BIOMES:
-                        biome = channel
-                    else:
-                        biome = "CORRUPTION"
-                    if kind == "UNSUPPORTED" or kind != owner.mode():
-                        log("listener", f"ignored link; channel={channel}, mode={owner.mode()}")
-                        return self.finish_response(204)
-                    if kind == "JESTER" and not load_settings().get("jester_enabled"):
-                        log("listener", "ignored Jester link; Windows Jester automation is disabled")
-                        return self.finish_response(204)
-                    if link_id in owner.seen:
-                        return self.finish_response(208)
-                    players = payload.get("playerCount")
-                    candidate = (link_id, uri, biome, kind, players)
-                    if owner.can_start():
-                        owner.launch(candidate)
-                        return self.finish_response(202)
-                    owner.pending = candidate
-                    log("listener", f"deferred active-session link {link_id}")
-                    return self.finish_response(409)
+                    return self.finish_response(status)
                 except Exception as error:
                     log("listener", f"request failed: {error}")
                     self.send_error(400)
@@ -510,6 +612,7 @@ class MonarchyServer:
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
         threading.Thread(target=self.dispatch_loop, daemon=True).start()
+        threading.Thread(target=self.discord_desktop_loop, daemon=True).start()
         log("listener", f"ready on 127.0.0.1:{PORT} in {self.mode()} mode")
         self.status_callback()
 
@@ -876,7 +979,7 @@ class Dashboard(tk.Tk):
             state = json.loads(CHANNEL_FILE.read_text(encoding="utf-8"))
             self.channel_var.set(f"Discord: {state['name']} • {'MATCHED' if state['matchesMode'] else 'BLOCKED'}")
         except Exception:
-            self.channel_var.set("Discord: waiting for browser extension")
+            self.channel_var.set("Discord: waiting for desktop app or browser extension")
         try:
             lines = LOG_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-80:]
         except OSError:

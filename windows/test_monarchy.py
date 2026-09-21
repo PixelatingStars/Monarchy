@@ -66,5 +66,26 @@ class UpdateTests(unittest.TestCase):
         self.assertIsNone(monarchy.version_key("latest"))
 
 
+class DiscordDesktopTests(unittest.TestCase):
+    def test_accessible_message_candidate(self):
+        instance = "12345678-1234-1234-1234-123456789abc"
+        message = (
+            "Corruption Biome Started 7/20 "
+            f"roblox://experiences/start?placeId={monarchy.PLACE_ID}&gameInstanceId={instance}"
+        )
+        candidates = monarchy.discord_desktop_candidates(
+            [message], (monarchy.MIXED_CHANNEL, "BIOME")
+        )
+        self.assertEqual(candidates[0]["targetBiome"], "CORRUPTION")
+        self.assertEqual(candidates[0]["playerCount"], 7)
+
+    def test_mixed_channel_rejects_message_without_biome(self):
+        instance = "12345678-1234-1234-1234-123456789abc"
+        message = f"roblox://experiences/start?placeId={monarchy.PLACE_ID}&gameInstanceId={instance}"
+        self.assertEqual(monarchy.discord_desktop_candidates(
+            [message], (monarchy.MIXED_CHANNEL, "BIOME")
+        ), [])
+
+
 if __name__ == "__main__":
     unittest.main()

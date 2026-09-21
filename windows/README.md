@@ -1,21 +1,33 @@
 # Monarchy for Windows 11
 
 This is the Windows 11 edition of Monarchy. It receives supported Sol's RNG
-server links from the included Chromium extension, launches them with the
-installed Roblox client, monitors biome sessions, and can run the guarded
-Jester workflow after per-PC calibration.
+server links from either the Windows Discord desktop app or the included
+Chromium extension, launches them with the installed Roblox client, monitors
+biome sessions, and can run the guarded Jester workflow after per-PC
+calibration.
 
 ## Requirements
 
 - Windows 11 (64-bit)
 - The Roblox desktop client, already signed in
-- Google Chrome, Chromium, Brave, or Microsoft Edge with the unpacked
-  `extension` folder loaded
+- The Windows Discord desktop app, or Google Chrome/Chromium/Brave/Microsoft
+  Edge with the unpacked `extension` folder loaded as a fallback
 - Tesseract OCR on `PATH` when running from source
 - A 1920x1080 Roblox window for the initial preview build
 
 The portable release bundles Python dependencies and Tesseract OCR. It never
 contains the builder's Roblox cookies, Discord credentials, logs, or settings.
+
+## Discord desktop monitoring
+
+Start Monarchy while the supported Discord channel is open in the official
+Windows Discord app. Monarchy reads Discord's Windows accessibility tree; it
+does not read Discord credentials, inject code, or modify the Discord client.
+At startup it records already-visible links as a baseline and acts only on new
+links that appear afterward. The selected channel must be exposed in Discord's
+window title or accessibility selection state. If the dashboard keeps showing
+that it is waiting, use the Chromium extension fallback and report the Discord
+version plus the recent Monarchy activity log for compatibility work.
 
 ## Run from source
 

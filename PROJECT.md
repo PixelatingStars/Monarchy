@@ -16,6 +16,16 @@ process/window/input support, bundled-build support, Rich Presence biome
 monitoring, and a fail-closed calibrated Jester workflow. Fish Macro and
 biome-item automation have not yet been ported to Windows.
 
+Windows v0.3.0 adds official Discord desktop-app monitoring through Microsoft
+UI Automation, with the Chromium extension retained as a fallback. It reads
+only Discord's exposed accessibility names and selected-channel state; it does
+not extract credentials, inspect process memory, inject code, or modify the
+Discord client. The listener baselines links already visible when monitoring
+starts, then forwards only newly exposed supported links through the same
+validation, mode, deduplication, and Jester safety path used by the browser
+extension. Channel identification fails closed when Discord exposes neither a
+supported channel in its window title nor a selected accessible channel.
+
 After launching a Roblox server, the Windows edition focuses the Roblox window
 and uses Roblox UI Navigation (`backslash`, Down, Enter, `backslash`) to
 activate Play. It makes at most three attempts, eight seconds apart, and still

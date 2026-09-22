@@ -26,10 +26,12 @@ validation, biome classification, and deduplication path used by the browser
 extension. Channel identification fails closed when Discord exposes neither a
 supported channel in its window title nor a selected accessible channel.
 
-After launching a Roblox server, the Windows edition focuses the Roblox window
-and uses Roblox UI Navigation (`backslash`, Down, Enter, `backslash`) to
-activate Play. It makes at most three attempts, eight seconds apart, and still
-requires OCR confirmation of the in-game Roll control within the existing
+After launching a Roblox server, the Windows edition focuses the Roblox window,
+OCR-locates the visible Play label in the lower-left half of the live window,
+and clicks the center of the recognized word. Detection and click coordinates
+use the actual window dimensions, including 2560×1440, rather than fixed
+reference coordinates. It makes at most six attempts, four seconds apart, and
+still requires OCR confirmation of the in-game Roll control within the existing
 90-second watchdog before biome monitoring proceeds.
 
 Windows v0.3.1 hardens this step against Windows foreground-lock behavior. It
@@ -75,6 +77,13 @@ after the first snapshot. The desktop watcher now unions links into its startup
 baseline for five seconds, marks every newly exposed link as seen, and submits
 only the newest one from each later scan. This prevents historical-link floods
 from repeatedly replacing the pending server while retaining newest-link wins.
+
+Windows v0.3.7 removes Roblox UI Navigation from Windows Play activation after
+confirmed no-input behavior on the user's PC. It instead performs a
+resolution-independent OCR scan of the window's lower-left half, requires an
+exact `Play` word with minimum confidence, clicks the detected word center, and
+fails closed without clicking when Play is not recognized. The in-game Roll
+OCR check remains the final success gate.
 
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow

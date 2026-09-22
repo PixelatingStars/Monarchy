@@ -77,11 +77,13 @@ from public GitHub releases and do not use credentials.
 
 ## Safety and limitations
 
-- Play activation verifies Roblox has foreground focus before sending UI
-  Navigation keys. Recent activity records the focus result and every key. A
+- Play activation verifies Roblox has foreground focus, OCR-locates the visible
+  Play label in the lower-left of the live Roblox window, and mouse-clicks its
+  detected center. It uses the actual window dimensions, including 2560×1440,
+  rather than fixed coordinates. A
   `Windows did not give foreground focus to Roblox` failure means another app
-  or Windows focus policy retained keyboard input; Monarchy does not send the
-  sequence blindly in that state.
+  or Windows focus policy retained input. Monarchy skips the click when OCR
+  does not positively recognize Play.
 - Shop automation, fishing, and biome-item automation are intentionally not
   included in the current biome-focused Windows Edition.
 - Display scaling and Roblox UI changes can affect OCR. Keep Windows scaling at

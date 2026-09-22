@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.6"
+APP_VERSION = "0.3.7"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -364,39 +364,72 @@ def ocr_region(window, region, psm=6) -> str:
     return re.sub(r"\s+", " ", text).strip().upper()
 
 
-def activate_play_with_ui_navigation(window) -> None:
-    """Activate the landing-screen Play button through Roblox UI Navigation."""
+def play_box_from_ocr(data):
+    """Return the highest-confidence exact Play word box from Tesseract data."""
+    matches = []
+    for index, text in enumerate(data.get("text", [])):
+        if re.sub(r"[^A-Z]", "", str(text).upper()) != "PLAY":
+            continue
+        try:
+            confidence = float(data["conf"][index])
+            box = tuple(int(data[name][index]) for name in ("left", "top", "width", "height"))
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
+        if confidence >= 30 and box[2] > 5 and box[3] > 5:
+            matches.append((confidence, box))
+    return max(matches, default=(None, None), key=lambda item: item[0])
+
+
+def activate_play_with_mouse(window) -> bool:
+    """OCR-locate and click Play inside the lower-left of the Roblox window."""
     import pyautogui
+    from PIL import ImageGrab
+    import pytesseract
     if not focus_window(window):
         raise RuntimeError("Windows did not give foreground focus to Roblox")
     log("play", "Roblox foreground focus confirmed")
-    for label, key, delay in (("UI Navigation toggle", "\\", .35),
-                              ("Down", "down", .35),
-                              ("Enter", "enter", .5),
-                              ("UI Navigation exit", "\\", 0)):
-        log("play", f"sending {label}")
-        pyautogui.press(key)
-        if delay:
-            time.sleep(delay)
+    _, x, y, width, height = window
+    crop_left = x
+    crop_top = y + round(height * .5)
+    crop_width = max(1, round(width * .45))
+    crop_height = max(1, height - (crop_top - y))
+    bundled = APP_DIR / "tesseract" / "tesseract.exe"
+    if bundled.exists():
+        pytesseract.pytesseract.tesseract_cmd = str(bundled)
+    image = ImageGrab.grab(
+        bbox=(crop_left, crop_top, crop_left + crop_width, crop_top + crop_height),
+        all_screens=True,
+    )
+    data = pytesseract.image_to_data(image, config="--psm 11", output_type=pytesseract.Output.DICT)
+    confidence, box = play_box_from_ocr(data)
+    if box is None:
+        log("play", "Play label was not found by OCR; mouse click skipped")
+        return False
+    left, top, box_width, box_height = box
+    click_x = crop_left + left + box_width // 2
+    click_y = crop_top + top + box_height // 2
+    log("play", f"clicking OCR-detected Play at {click_x},{click_y} (confidence {confidence:.0f})")
+    pyautogui.click(click_x, click_y)
+    return True
 
 
 def wait_for_roll(timeout=90):
     deadline = time.monotonic() + timeout
-    next_navigation = 0.0
-    navigation_attempts = 0
+    next_play_attempt = 0.0
+    play_attempts = 0
     while time.monotonic() < deadline:
         window = roblox_window()
         if window and "ROLL" in ocr_region(window, (620, 875, 720, 205), 11):
             return window
         now = time.monotonic()
-        if window and navigation_attempts < 3 and now >= next_navigation:
-            navigation_attempts += 1
-            log("play", f"UI Navigation attempt {navigation_attempts}/3")
+        if window and play_attempts < 6 and now >= next_play_attempt:
+            play_attempts += 1
+            log("play", f"OCR-guided Play mouse attempt {play_attempts}/6")
             try:
-                activate_play_with_ui_navigation(window)
+                activate_play_with_mouse(window)
             except Exception as error:
-                log("play", f"UI Navigation attempt failed: {error}")
-            next_navigation = time.monotonic() + 8
+                log("play", f"Play mouse attempt failed: {error}")
+            next_play_attempt = time.monotonic() + 4
         time.sleep(1)
     return None
 

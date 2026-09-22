@@ -62,6 +62,27 @@ class UpdateTests(unittest.TestCase):
         self.assertIsNone(monarchy.version_key("latest"))
 
 
+class PlayDetectionTests(unittest.TestCase):
+    def test_exact_play_box_with_best_confidence_is_selected(self):
+        data = {
+            "text": ["Changelogs", "Play", "PLAY!"],
+            "conf": [95, 42, 89],
+            "left": [1, 20, 30], "top": [2, 40, 50],
+            "width": [80, 60, 70], "height": [12, 20, 24],
+        }
+        confidence, box = monarchy.play_box_from_ocr(data)
+        self.assertEqual(confidence, 89)
+        self.assertEqual(box, (30, 50, 70, 24))
+
+    def test_low_confidence_play_is_rejected(self):
+        confidence, box = monarchy.play_box_from_ocr({
+            "text": ["Play"], "conf": [12], "left": [1], "top": [2],
+            "width": [40], "height": [15],
+        })
+        self.assertIsNone(confidence)
+        self.assertIsNone(box)
+
+
 class DiscordDesktopTests(unittest.TestCase):
     def test_accessible_message_candidate(self):
         instance = "12345678-1234-1234-1234-123456789abc"

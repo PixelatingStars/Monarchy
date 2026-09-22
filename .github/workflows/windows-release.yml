@@ -27,7 +27,15 @@ jobs:
 
       - name: Install Tesseract
         shell: powershell
-        run: choco install tesseract --yes --no-progress
+        run: |
+          $Tesseract = Join-Path $env:ProgramFiles "Tesseract-OCR\tesseract.exe"
+          for ($Attempt = 1; $Attempt -le 4; $Attempt++) {
+            choco install tesseract --yes --no-progress
+            if (Test-Path $Tesseract) { break }
+            if ($Attempt -eq 4) { throw "Tesseract was not installed after four attempts." }
+            Write-Warning "Tesseract download failed; retrying attempt $($Attempt + 1)/4 in 15 seconds."
+            Start-Sleep -Seconds 15
+          }
 
       - name: Create Python environment
         shell: powershell

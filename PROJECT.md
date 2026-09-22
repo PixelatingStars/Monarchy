@@ -85,6 +85,12 @@ exact `Play` word with minimum confidence, clicks the detected word center, and
 fails closed without clicking when Play is not recognized. The in-game Roll
 OCR check remains the final success gate.
 
+Windows v0.3.8 carries the same mouse-based Play activation after the v0.3.7
+release build was blocked by repeated Chocolatey HTTP 503 responses. The
+release workflow now verifies that `tesseract.exe` actually exists after each
+Chocolatey invocation and retries up to four times instead of trusting
+Chocolatey's zero exit status when it installed zero packages.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

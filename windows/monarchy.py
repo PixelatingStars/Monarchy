@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import ctypes
 import os
 import re
 import shutil
@@ -22,13 +21,12 @@ import time
 import tkinter as tk
 import urllib.error
 import urllib.request
-from ctypes import wintypes
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.4.2"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -46,29 +44,6 @@ CHANNEL_FILE = DATA_DIR / "channel.json"
 DEFAULT_SETTINGS = {
     "close_roblox_on_stop": True,
 }
-
-
-class _MouseInput(ctypes.Structure):
-    _fields_ = (
-        ("dx", wintypes.LONG),
-        ("dy", wintypes.LONG),
-        ("mouseData", wintypes.DWORD),
-        ("dwFlags", wintypes.DWORD),
-        ("time", wintypes.DWORD),
-        ("dwExtraInfo", ctypes.c_void_p),
-    )
-
-
-class _InputUnion(ctypes.Union):
-    _fields_ = (("mi", _MouseInput),)
-
-
-class _Input(ctypes.Structure):
-    _anonymous_ = ("value",)
-    _fields_ = (("type", wintypes.DWORD), ("value", _InputUnion))
-
-
-_play_click_lock = threading.Lock()
 
 
 def migrate_legacy_data() -> None:
@@ -352,42 +327,6 @@ def roblox_window():
         return None
 
 
-def focus_window(window) -> bool:
-    import win32api
-    import win32con
-    import win32gui
-    import win32process
-    hwnd = window[0]
-    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-    attached = []
-    try:
-        current_thread = win32api.GetCurrentThreadId()
-        target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
-        foreground = win32gui.GetForegroundWindow()
-        foreground_thread = win32process.GetWindowThreadProcessId(foreground)[0] if foreground else 0
-        for thread_id in {target_thread, foreground_thread} - {0, current_thread}:
-            win32process.AttachThreadInput(current_thread, thread_id, True)
-            attached.append(thread_id)
-        win32gui.BringWindowToTop(hwnd)
-        win32gui.SetForegroundWindow(hwnd)
-        win32gui.SetFocus(hwnd)
-    except Exception as error:
-        log("play", f"direct foreground handoff failed: {error}")
-    finally:
-        for thread_id in reversed(attached):
-            try:
-                win32process.AttachThreadInput(win32api.GetCurrentThreadId(), thread_id, False)
-            except Exception:
-                pass
-    time.sleep(.25)
-    foreground = win32gui.GetForegroundWindow()
-    try:
-        foreground_root = win32gui.GetAncestor(foreground, win32con.GA_ROOT)
-    except Exception:
-        foreground_root = foreground
-    return foreground_root == hwnd
-
-
 def ocr_region(window, region, psm=6) -> str:
     from PIL import ImageGrab
     import pytesseract
@@ -404,144 +343,15 @@ def ocr_region(window, region, psm=6) -> str:
     return re.sub(r"\s+", " ", text).strip().upper()
 
 
-def play_box_from_ocr(data):
-    """Return the highest-confidence exact Play word box from Tesseract data."""
-    matches = []
-    for index, text in enumerate(data.get("text", [])):
-        if re.sub(r"[^A-Z]", "", str(text).upper()) != "PLAY":
-            continue
-        try:
-            confidence = float(data["conf"][index])
-            box = tuple(int(data[name][index]) for name in ("left", "top", "width", "height"))
-        except (KeyError, TypeError, ValueError, IndexError):
-            continue
-        if confidence >= 30 and box[2] > 5 and box[3] > 5:
-            matches.append((confidence, box))
-    return max(matches, default=(None, None), key=lambda item: item[0])
-
-
-def send_windows_left_click(hold_seconds=.2) -> None:
-    """Send a game-compatible left click through the Windows SendInput API."""
-    send_input = ctypes.windll.user32.SendInput
-    send_input.argtypes = (wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int)
-    send_input.restype = wintypes.UINT
-
-    def send(flags):
-        event = _Input(type=0, mi=_MouseInput(dwFlags=flags))
-        if send_input(1, ctypes.byref(event), ctypes.sizeof(_Input)) != 1:
-            raise ctypes.WinError(ctypes.get_last_error())
-
-    send(0x0002)  # MOUSEEVENTF_LEFTDOWN
-    try:
-        time.sleep(hold_seconds)
-    finally:
-        send(0x0004)  # MOUSEEVENTF_LEFTUP
-
-
-def send_play_input(window, click_x, click_y, method) -> None:
-    """Try an independent Windows input path for the Roblox Play control."""
-    hwnd = window[0]
-    if method == "SendInput":
-        send_windows_left_click(.2)
-    elif method == "legacy mouse event":
-        import win32api
-        import win32con
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-        time.sleep(.2)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-    elif method == "window message":
-        import win32api
-        import win32con
-        import win32gui
-        client_x, client_y = win32gui.ScreenToClient(hwnd, (click_x, click_y))
-        position = win32api.MAKELONG(client_x, client_y)
-        win32gui.PostMessage(hwnd, win32con.WM_MOUSEMOVE, 0, position)
-        win32gui.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
-        time.sleep(.2)
-        win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, position)
-    elif method == "SendInput double click":
-        send_windows_left_click(.12)
-        time.sleep(.12)
-        send_windows_left_click(.12)
-    elif method == "Enter key":
-        import pyautogui
-        pyautogui.press("enter")
-    elif method == "Space key":
-        import pyautogui
-        pyautogui.press("space")
-    else:
-        raise ValueError(f"unknown Play input method: {method}")
-
-
-def activate_play_with_mouse(window, method="SendInput") -> bool:
-    if not _play_click_lock.acquire(blocking=False):
-        log("play", "another Play mouse attempt is already active; duplicate skipped")
-        return False
-    try:
-        return _activate_play_with_mouse(window, method)
-    finally:
-        _play_click_lock.release()
-
-
-def _activate_play_with_mouse(window, method) -> bool:
-    """OCR-locate and click Play inside the lower-left of the Roblox window."""
-    import pyautogui
-    from PIL import ImageGrab
-    import pytesseract
-    if not focus_window(window):
-        raise RuntimeError("Windows did not give foreground focus to Roblox")
-    log("play", "Roblox foreground focus confirmed")
-    _, x, y, width, height = window
-    crop_left = x
-    crop_top = y + round(height * .5)
-    crop_width = max(1, round(width * .45))
-    crop_height = max(1, height - (crop_top - y))
-    bundled = APP_DIR / "tesseract" / "tesseract.exe"
-    if bundled.exists():
-        pytesseract.pytesseract.tesseract_cmd = str(bundled)
-    image = ImageGrab.grab(
-        bbox=(crop_left, crop_top, crop_left + crop_width, crop_top + crop_height),
-        all_screens=True,
-    )
-    data = pytesseract.image_to_data(image, config="--psm 11", output_type=pytesseract.Output.DICT)
-    confidence, box = play_box_from_ocr(data)
-    if box is None:
-        log("play", "Play label was not found by OCR; mouse click skipped")
-        return False
-    left, top, box_width, box_height = box
-    click_x = crop_left + left + box_width // 2
-    click_y = crop_top + top + box_height // 2
-    log("play", f"moving to OCR-detected Play at {click_x},{click_y} (confidence {confidence:.0f})")
-    pyautogui.moveTo(click_x, click_y, duration=.3)
-    time.sleep(.5)
-    log("play", f"trying {method} on Play")
-    send_play_input(window, click_x, click_y, method)
-    log("play", f"{method} completed on Play")
-    return True
-
-
 def wait_for_roll(timeout=90, cancel_event=None):
     deadline = time.monotonic() + timeout
-    next_play_attempt = 0.0
-    play_attempts = 0
-    methods = ("SendInput", "legacy mouse event", "window message",
-               "SendInput double click", "Enter key", "Space key")
+    log("biome", "Play automation is disabled; waiting for external Play activation and Roll screen")
     while time.monotonic() < deadline:
         if cancel_event and cancel_event.is_set():
             return None
         window = roblox_window()
         if window and "ROLL" in ocr_region(window, (620, 875, 720, 205), 11):
             return window
-        now = time.monotonic()
-        if window and play_attempts < 6 and now >= next_play_attempt:
-            play_attempts += 1
-            method = methods[play_attempts - 1]
-            log("play", f"OCR-guided Play attempt {play_attempts}/6 using {method}")
-            try:
-                activate_play_with_mouse(window, method)
-            except Exception as error:
-                log("play", f"Play mouse attempt failed: {error}")
-            next_play_attempt = time.monotonic() + 3
         if cancel_event:
             cancel_event.wait(0.5)
         else:

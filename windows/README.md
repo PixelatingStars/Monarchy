@@ -89,23 +89,15 @@ public GitHub releases and do not use credentials.
 
 ## Safety and limitations
 
-- Play activation verifies Roblox has foreground focus, OCR-locates the visible
-  Play label, moves to its center, pauses for the hover state, and sends a
-  sequence of independent activation methods: Windows `SendInput`, the legacy
-  Windows mouse API, direct window messages, a native double-click, Enter, and
-  Space. It checks for the in-game Roll control between attempts and proceeds
-  only after that verification succeeds. It uses the actual window
-  dimensions, including 2560×1440, rather than fixed coordinates. A
-  duplicate Play attempt is skipped while an existing OCR/click attempt is
-  active.
-  `Windows did not give foreground focus to Roblox` failure means another app
-  or Windows focus policy retained input. Monarchy skips the click when OCR
-  does not positively recognize Play.
+- Monarchy intentionally does not move the cursor, focus Roblox, click Play, or
+  send Play-related keyboard input. Use an external autoclicker or click Play
+  manually. Monarchy only waits for OCR confirmation that the Roll screen was
+  reached before beginning biome verification.
 - Only one biome workflow can own a Roblox session. Pressing Stop cancels its
   timers immediately, discards the deferred link, and prevents an old 90-second
   timeout from closing a newer Roblox session.
 - Shop automation, fishing, and biome-item automation are intentionally not
   included in the current biome-focused Windows Edition.
-- Display scaling and Roblox UI changes can affect OCR. Keep Windows scaling at
-  100% while troubleshooting Play or Roll detection.
+- Display scaling and Roblox UI changes can affect Roll OCR. Keep Windows
+  scaling at 100% while troubleshooting Roll detection.
 - Game automation may carry account-enforcement risk. Use it at your own risk.

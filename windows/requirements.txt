@@ -1,7 +1,5 @@
 Pillow==11.3.0
 psutil==7.0.0
-pyautogui==0.9.54
-pygetwindow==0.0.9
 pytesseract==0.3.13
 pywin32==311
 pywinauto==0.6.9

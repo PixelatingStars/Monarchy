@@ -83,6 +83,8 @@ from public GitHub releases and do not use credentials.
   API, which Roblox can receive as game input. It then verifies that the in-game
   Roll control appeared before continuing. It uses the actual window
   dimensions, including 2560×1440, rather than fixed coordinates. A
+  duplicate Play attempt is skipped while an existing OCR/click attempt is
+  active.
   `Windows did not give foreground focus to Roblox` failure means another app
   or Windows focus policy retained input. Monarchy skips the click when OCR
   does not positively recognize Play.

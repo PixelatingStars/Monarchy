@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import ctypes
 import os
 import re
 import subprocess
@@ -20,12 +21,13 @@ import time
 import tkinter as tk
 import urllib.error
 import urllib.request
+from ctypes import wintypes
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.10"
+APP_VERSION = "0.3.11"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -40,6 +42,29 @@ CHANNEL_FILE = DATA_DIR / "channel.json"
 DEFAULT_SETTINGS = {
     "close_roblox_on_stop": True,
 }
+
+
+class _MouseInput(ctypes.Structure):
+    _fields_ = (
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_void_p),
+    )
+
+
+class _InputUnion(ctypes.Union):
+    _fields_ = (("mi", _MouseInput),)
+
+
+class _Input(ctypes.Structure):
+    _anonymous_ = ("value",)
+    _fields_ = (("type", wintypes.DWORD), ("value", _InputUnion))
+
+
+_play_click_lock = threading.Lock()
 
 
 def github_request(url: str, accept="application/vnd.github+json"):
@@ -382,33 +407,13 @@ def play_box_from_ocr(data):
 
 def send_windows_left_click(hold_seconds=.2) -> None:
     """Send a game-compatible left click through the Windows SendInput API."""
-    import ctypes
-    from ctypes import wintypes
-
-    class MouseInput(ctypes.Structure):
-        _fields_ = (
-            ("dx", wintypes.LONG),
-            ("dy", wintypes.LONG),
-            ("mouseData", wintypes.DWORD),
-            ("dwFlags", wintypes.DWORD),
-            ("time", wintypes.DWORD),
-            ("dwExtraInfo", ctypes.c_void_p),
-        )
-
-    class InputUnion(ctypes.Union):
-        _fields_ = (("mi", MouseInput),)
-
-    class Input(ctypes.Structure):
-        _anonymous_ = ("value",)
-        _fields_ = (("type", wintypes.DWORD), ("value", InputUnion))
-
     send_input = ctypes.windll.user32.SendInput
-    send_input.argtypes = (wintypes.UINT, ctypes.POINTER(Input), ctypes.c_int)
+    send_input.argtypes = (wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int)
     send_input.restype = wintypes.UINT
 
     def send(flags):
-        event = Input(type=0, mi=MouseInput(dwFlags=flags))
-        if send_input(1, ctypes.byref(event), ctypes.sizeof(Input)) != 1:
+        event = _Input(type=0, mi=_MouseInput(dwFlags=flags))
+        if send_input(1, ctypes.byref(event), ctypes.sizeof(_Input)) != 1:
             raise ctypes.WinError(ctypes.get_last_error())
 
     send(0x0002)  # MOUSEEVENTF_LEFTDOWN
@@ -419,6 +424,16 @@ def send_windows_left_click(hold_seconds=.2) -> None:
 
 
 def activate_play_with_mouse(window) -> bool:
+    if not _play_click_lock.acquire(blocking=False):
+        log("play", "another Play mouse attempt is already active; duplicate skipped")
+        return False
+    try:
+        return _activate_play_with_mouse(window)
+    finally:
+        _play_click_lock.release()
+
+
+def _activate_play_with_mouse(window) -> bool:
     """OCR-locate and click Play inside the lower-left of the Roblox window."""
     import pyautogui
     from PIL import ImageGrab

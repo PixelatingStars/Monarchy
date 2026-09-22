@@ -103,6 +103,12 @@ button event. PyAutoGUI remains responsible only for the visible, timed pointer
 movement; a native `MOUSEEVENTF_LEFTDOWN`/`MOUSEEVENTF_LEFTUP` pair performs the
 200 ms click. Failure to inject is logged instead of being treated as success.
 
+Windows v0.3.11 fixes concurrent Play attempts recreating incompatible ctypes
+`Input` classes while sharing the same Windows function signature, which caused
+`expected LP_Input instance instead of pointer to Input`. Input structures are
+now permanent module-level types, and a nonblocking Play-attempt lock skips any
+duplicate activation while one OCR/mouse attempt is already running.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

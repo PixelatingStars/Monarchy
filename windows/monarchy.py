@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -438,17 +438,52 @@ def send_windows_left_click(hold_seconds=.2) -> None:
         send(0x0004)  # MOUSEEVENTF_LEFTUP
 
 
-def activate_play_with_mouse(window) -> bool:
+def send_play_input(window, click_x, click_y, method) -> None:
+    """Try an independent Windows input path for the Roblox Play control."""
+    hwnd = window[0]
+    if method == "SendInput":
+        send_windows_left_click(.2)
+    elif method == "legacy mouse event":
+        import win32api
+        import win32con
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        time.sleep(.2)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+    elif method == "window message":
+        import win32api
+        import win32con
+        import win32gui
+        client_x, client_y = win32gui.ScreenToClient(hwnd, (click_x, click_y))
+        position = win32api.MAKELONG(client_x, client_y)
+        win32gui.PostMessage(hwnd, win32con.WM_MOUSEMOVE, 0, position)
+        win32gui.PostMessage(hwnd, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, position)
+        time.sleep(.2)
+        win32gui.PostMessage(hwnd, win32con.WM_LBUTTONUP, 0, position)
+    elif method == "SendInput double click":
+        send_windows_left_click(.12)
+        time.sleep(.12)
+        send_windows_left_click(.12)
+    elif method == "Enter key":
+        import pyautogui
+        pyautogui.press("enter")
+    elif method == "Space key":
+        import pyautogui
+        pyautogui.press("space")
+    else:
+        raise ValueError(f"unknown Play input method: {method}")
+
+
+def activate_play_with_mouse(window, method="SendInput") -> bool:
     if not _play_click_lock.acquire(blocking=False):
         log("play", "another Play mouse attempt is already active; duplicate skipped")
         return False
     try:
-        return _activate_play_with_mouse(window)
+        return _activate_play_with_mouse(window, method)
     finally:
         _play_click_lock.release()
 
 
-def _activate_play_with_mouse(window) -> bool:
+def _activate_play_with_mouse(window, method) -> bool:
     """OCR-locate and click Play inside the lower-left of the Roblox window."""
     import pyautogui
     from PIL import ImageGrab
@@ -479,30 +514,38 @@ def _activate_play_with_mouse(window) -> bool:
     log("play", f"moving to OCR-detected Play at {click_x},{click_y} (confidence {confidence:.0f})")
     pyautogui.moveTo(click_x, click_y, duration=.3)
     time.sleep(.5)
-    log("play", "sending Windows SendInput left click on Play")
-    send_windows_left_click(.2)
-    log("play", "Windows SendInput left click released on Play")
+    log("play", f"trying {method} on Play")
+    send_play_input(window, click_x, click_y, method)
+    log("play", f"{method} completed on Play")
     return True
 
 
-def wait_for_roll(timeout=90):
+def wait_for_roll(timeout=90, cancel_event=None):
     deadline = time.monotonic() + timeout
     next_play_attempt = 0.0
     play_attempts = 0
+    methods = ("SendInput", "legacy mouse event", "window message",
+               "SendInput double click", "Enter key", "Space key")
     while time.monotonic() < deadline:
+        if cancel_event and cancel_event.is_set():
+            return None
         window = roblox_window()
         if window and "ROLL" in ocr_region(window, (620, 875, 720, 205), 11):
             return window
         now = time.monotonic()
         if window and play_attempts < 6 and now >= next_play_attempt:
             play_attempts += 1
-            log("play", f"OCR-guided Play mouse attempt {play_attempts}/6")
+            method = methods[play_attempts - 1]
+            log("play", f"OCR-guided Play attempt {play_attempts}/6 using {method}")
             try:
-                activate_play_with_mouse(window)
+                activate_play_with_mouse(window, method)
             except Exception as error:
                 log("play", f"Play mouse attempt failed: {error}")
-            next_play_attempt = time.monotonic() + 4
-        time.sleep(1)
+            next_play_attempt = time.monotonic() + 3
+        if cancel_event:
+            cancel_event.wait(0.5)
+        else:
+            time.sleep(0.5)
     return None
 
 
@@ -531,6 +574,7 @@ class MonarchyServer:
         self.seen = set()
         self.pending = None
         self.active = False
+        self.session_cancel = None
         self.cooldown_until = 0.0
         self.lock = threading.Lock()
         self.channel = ("UNSUPPORTED", "UNSUPPORTED")
@@ -546,14 +590,19 @@ class MonarchyServer:
 
     def can_start(self):
         with self.lock:
-            if self.active and not roblox_running():
-                self.active = False
-                self.cooldown_until = time.monotonic() + 5
-                log("listener", "Roblox exited; starting 5-second handoff cooldown")
             if self.active or time.monotonic() < self.cooldown_until:
                 return False
             self.active = True
             return True
+
+    def finish_session(self, cancel_event):
+        with self.lock:
+            if self.session_cancel is not cancel_event:
+                return
+            self.active = False
+            self.session_cancel = None
+            self.cooldown_until = time.monotonic() + 5
+        log("listener", "session finished; starting 5-second handoff cooldown")
 
     def submit_link(self, payload):
         parsed = parse_link(str(payload.get("url", "")))
@@ -625,8 +674,12 @@ class MonarchyServer:
         notify("Monarchy", f"New {biome.title()} link detected")
         if roblox_running():
             close_roblox()
+        cancel_event = threading.Event()
+        with self.lock:
+            self.session_cancel = cancel_event
         os.startfile(uri)  # noqa: S606 - registered Roblox protocol is intentional
-        threading.Thread(target=biome_workflow, args=(biome,), daemon=True).start()
+        threading.Thread(target=biome_workflow,
+                         args=(biome, cancel_event, self.finish_session), daemon=True).start()
 
     def dispatch_loop(self):
         while self.httpd:
@@ -678,6 +731,12 @@ class MonarchyServer:
         self.status_callback()
 
     def stop(self):
+        with self.lock:
+            if self.session_cancel:
+                self.session_cancel.set()
+            self.session_cancel = None
+            self.active = False
+            self.pending = None
         if self.httpd:
             server, self.httpd = self.httpd, None
             server.shutdown()
@@ -688,33 +747,43 @@ class MonarchyServer:
         self.status_callback()
 
 
-def biome_workflow(target):
+def biome_workflow(target, cancel_event=None, finished=lambda _event: None):
+    cancel_event = cancel_event or threading.Event()
     started_at = time.time()
     log("biome", f"waiting for playable {target} session")
-    window = wait_for_roll()
-    if not window:
-        log("biome", "Roll screen was not reached within 90 seconds; closing Roblox")
-        close_roblox()
-        return
-    target_words = {"GLITCH": ("GLITCH", "GLITCHED")}.get(target, (target,))
-    deadline = time.monotonic() + 45
-    while time.monotonic() < deadline and roblox_running():
-        biome = current_logged_biome(started_at)
-        if any(word == biome for word in target_words):
-            log("biome", f"verified target biome {target}")
-            break
-        time.sleep(2)
-    else:
-        log("biome", f"target biome {target} was not verified; closing Roblox")
-        close_roblox()
-        return
-    while roblox_running():
-        biome = current_logged_biome(started_at)
-        if biome and not any(word == biome for word in target_words):
-            log("biome", f"{target} ended ({biome} detected); closing Roblox")
+    try:
+        window = wait_for_roll(cancel_event=cancel_event)
+        if cancel_event.is_set():
+            log("biome", "session cancelled; timeout actions skipped")
+            return
+        if not window:
+            log("biome", "Roll screen was not reached within 90 seconds; closing Roblox")
             close_roblox()
             return
-        time.sleep(1)
+        target_words = {"GLITCH": ("GLITCH", "GLITCHED")}.get(target, (target,))
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline and roblox_running() and not cancel_event.is_set():
+            biome = current_logged_biome(started_at)
+            if any(word == biome for word in target_words):
+                log("biome", f"verified target biome {target}")
+                break
+            cancel_event.wait(2)
+        else:
+            if cancel_event.is_set():
+                log("biome", "session cancelled during biome verification")
+                return
+            log("biome", f"target biome {target} was not verified; closing Roblox")
+            close_roblox()
+            return
+        while roblox_running() and not cancel_event.is_set():
+            biome = current_logged_biome(started_at)
+            if biome and not any(word == biome for word in target_words):
+                log("biome", f"{target} ended ({biome} detected); closing Roblox")
+                close_roblox()
+                return
+            cancel_event.wait(1)
+    finally:
+        finished(cancel_event)
 
 
 class Dashboard(tk.Tk):
@@ -1030,4 +1099,5 @@ if __name__ == "__main__":
     if os.name != "nt":
         print("Monarchy Windows requires Windows Edition.", file=sys.stderr)
         raise SystemExit(1)
+    log("app", f"Monarchy Windows Edition v{APP_VERSION} started; data={DATA_DIR}")
     Dashboard().mainloop()

@@ -122,6 +122,17 @@ updates verify the setup EXE checksum, close Monarchy, run Setup silently, and
 relaunch the installed app. Portable v0.4.0 offers its same-version installer
 as a migration, while an already installed v0.4.0 does not.
 
+Windows v0.4.1 expands Play activation into six independently verified methods:
+native `SendInput`, legacy `mouse_event`, direct Roblox-window mouse messages,
+a native double-click, Enter, and Space. The cursor is still placed only on an
+OCR-confirmed Play label, and Roll OCR is checked between methods. It also fixes
+overlapping 90-second workers: an active session is no longer cleared merely
+because the Roblox process has not appeared yet, each workflow owns a distinct
+cancellation event, Stop cancels that event and clears the pending link, and a
+cancelled worker skips all timeout/close actions. Startup now logs the exact app
+version and data path. The generated purple crown icon is cropped to its alpha
+bounds and enlarged from 216 to 250 pixels within the 256-pixel canvas.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

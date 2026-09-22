@@ -176,5 +176,28 @@ class DiscordDesktopTests(unittest.TestCase):
         self.assertEqual(known, {f"public:{first}", f"public:{second}", f"public:{third}"})
 
 
+class SessionLifecycleTests(unittest.TestCase):
+    def test_active_session_is_not_released_during_roblox_startup(self):
+        server = monarchy.MonarchyServer()
+        server.active = True
+        with patch.object(monarchy, "roblox_running", return_value=False) as running:
+            self.assertFalse(server.can_start())
+        running.assert_not_called()
+        self.assertTrue(server.active)
+
+    def test_stop_cancels_active_session_and_discards_pending_link(self):
+        server = monarchy.MonarchyServer()
+        cancel_event = monarchy.threading.Event()
+        server.active = True
+        server.session_cancel = cancel_event
+        server.pending = object()
+        with patch.object(monarchy, "load_settings", return_value={"close_roblox_on_stop": False}), \
+             patch.object(monarchy, "log"):
+            server.stop()
+        self.assertTrue(cancel_event.is_set())
+        self.assertFalse(server.active)
+        self.assertIsNone(server.pending)
+
+
 if __name__ == "__main__":
     unittest.main()

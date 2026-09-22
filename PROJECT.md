@@ -91,6 +91,12 @@ release workflow now verifies that `tesseract.exe` actually exists after each
 Chocolatey invocation and retries up to four times instead of trusting
 Chocolatey's zero exit status when it installed zero packages.
 
+Windows v0.3.9 fixes a case where OCR moved the pointer onto Play but Roblox did
+not accept PyAutoGUI's instantaneous combined click. Monarchy now moves to the
+recognized Play center over 300 ms, allows the hover state to settle for 500 ms,
+then sends an explicit left-button down, holds it for 200 ms, and releases it.
+The existing Roll OCR check and retry limit remain the success and safety gates.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

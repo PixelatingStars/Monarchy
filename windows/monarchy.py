@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.8"
+APP_VERSION = "0.3.9"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -408,8 +408,14 @@ def activate_play_with_mouse(window) -> bool:
     left, top, box_width, box_height = box
     click_x = crop_left + left + box_width // 2
     click_y = crop_top + top + box_height // 2
-    log("play", f"clicking OCR-detected Play at {click_x},{click_y} (confidence {confidence:.0f})")
-    pyautogui.click(click_x, click_y)
+    log("play", f"moving to OCR-detected Play at {click_x},{click_y} (confidence {confidence:.0f})")
+    pyautogui.moveTo(click_x, click_y, duration=.3)
+    time.sleep(.5)
+    log("play", "pressing and holding the left mouse button on Play")
+    pyautogui.mouseDown(button="left")
+    time.sleep(.2)
+    pyautogui.mouseUp(button="left")
+    log("play", "released the left mouse button on Play")
     return True
 
 

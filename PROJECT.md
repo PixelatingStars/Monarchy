@@ -61,6 +61,14 @@ a dark purple sidebar, Dashboard/Biomes/Settings/Logs pages, status and target
 cards, a supported-biome list, runtime, and activity logs. Fish and Jester pages
 remain intentionally absent until those features are ported later.
 
+Windows v0.3.5 fixes Hell-channel rejection caused by competing Discord window
+titles. Once the desktop accessibility watcher or browser extension reports a
+selected channel, that channel remains authoritative through link submission;
+the listener no longer re-scans all visible Discord-titled windows and
+overwrites Hell with a stale Corruption or other channel. Regression tests
+require both Hell and Corruption links to remain accepted and correctly
+targeted.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

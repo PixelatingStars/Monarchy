@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.4"
+APP_VERSION = "0.3.5"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -422,9 +422,6 @@ class MonarchyServer:
 
     def update_channel(self, name, kind):
         self.channel = (name, kind)
-        detected = discord_title_channel()
-        if detected:
-            self.channel = detected
         valid = self.channel[1] == "BIOME" and self.channel[0] in BIOMES | {MIXED_CHANNEL}
         CHANNEL_FILE.write_text(json.dumps({"name": self.channel[0], "kind": self.channel[1],
             "mode": "BIOME", "matchesMode": valid}, indent=2), encoding="utf-8")
@@ -449,9 +446,6 @@ class MonarchyServer:
         link_id, uri = parsed
         requested = str(payload.get("targetBiome", "")).upper()
         channel, kind = self.channel
-        detected = discord_title_channel()
-        if detected:
-            channel, kind = detected
         if channel == MIXED_CHANNEL and requested in BIOMES:
             biome = requested
         elif channel in BIOMES:

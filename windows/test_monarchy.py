@@ -82,6 +82,31 @@ class DiscordDesktopTests(unittest.TestCase):
             [message], (monarchy.MIXED_CHANNEL, "BIOME")
         ), [])
 
+    def test_hell_channel_is_not_overridden_by_stale_window_title(self):
+        instance = "12345678-1234-1234-1234-123456789abc"
+        server = monarchy.MonarchyServer()
+        server.channel = ("HELL", "BIOME")
+        payload = {
+            "url": f"roblox://experiences/start?placeId={monarchy.PLACE_ID}&gameInstanceId={instance}",
+            "targetBiome": "HELL",
+        }
+        with patch.object(monarchy, "discord_title_channel", return_value=("CORRUPTION", "BIOME")), \
+             patch.object(server, "can_start", return_value=False):
+            self.assertEqual(server.submit_link(payload), 409)
+        self.assertEqual(server.pending[2], "HELL")
+
+    def test_corruption_channel_remains_accepted(self):
+        instance = "abcdefab-1234-1234-1234-abcdefabcdef"
+        server = monarchy.MonarchyServer()
+        server.channel = ("CORRUPTION", "BIOME")
+        payload = {
+            "url": f"roblox://experiences/start?placeId={monarchy.PLACE_ID}&gameInstanceId={instance}",
+            "targetBiome": "CORRUPTION",
+        }
+        with patch.object(server, "can_start", return_value=False):
+            self.assertEqual(server.submit_link(payload), 409)
+        self.assertEqual(server.pending[2], "CORRUPTION")
+
 
 if __name__ == "__main__":
     unittest.main()

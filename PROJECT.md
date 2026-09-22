@@ -69,6 +69,13 @@ overwrites Hell with a stale Corruption or other channel. Regression tests
 require both Hell and Corruption links to remain accepted and correctly
 targeted.
 
+Windows v0.3.6 follows a real Windows log showing that Hell was accepted, but
+Discord UI Automation exposed dozens of older Hell links in batches immediately
+after the first snapshot. The desktop watcher now unions links into its startup
+baseline for five seconds, marks every newly exposed link as seen, and submits
+only the newest one from each later scan. This prevents historical-link floods
+from repeatedly replacing the pending server while retaining newest-link wins.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

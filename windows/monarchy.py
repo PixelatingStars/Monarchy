@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.5"
+APP_VERSION = "0.3.6"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -282,6 +282,17 @@ def discord_desktop_candidates(messages, channel):
     return candidates
 
 
+def newest_unseen_desktop_candidate(candidates, known_ids):
+    """Mark a scan as seen and return only its newest previously unseen link."""
+    unseen = []
+    for payload in candidates:
+        parsed = parse_link(payload["url"])
+        if parsed and parsed[0] not in known_ids:
+            unseen.append((parsed[0], payload))
+    known_ids.update(link_id for link_id, _payload in unseen)
+    return unseen[-1][1] if unseen else None
+
+
 def roblox_window():
     try:
         import win32gui
@@ -469,6 +480,7 @@ class MonarchyServer:
     def discord_desktop_loop(self):
         available_logged = False
         initialized = False
+        baseline_deadline = time.monotonic() + 5
         while self.httpd:
             try:
                 messages, selected = discord_desktop_snapshot()
@@ -481,21 +493,20 @@ class MonarchyServer:
                     log("discord", "Windows Discord accessibility monitoring active")
                     available_logged = True
                 candidates = discord_desktop_candidates(messages, detected)
-                if not initialized:
+                if time.monotonic() < baseline_deadline:
                     self.discord_desktop_seen.update(
                         parsed[0] for payload in candidates if (parsed := parse_link(payload["url"]))
                     )
-                    initialized = True
-                    log("discord", "desktop message baseline captured; watching for new links")
                     time.sleep(0.75)
                     continue
-                for payload in candidates:
+                if not initialized:
+                    initialized = True
+                    log("discord", "desktop message baseline captured; watching for new links")
+                payload = newest_unseen_desktop_candidate(candidates, self.discord_desktop_seen)
+                if payload:
                     parsed = parse_link(payload["url"])
-                    if not parsed or parsed[0] in self.discord_desktop_seen:
-                        continue
                     status = self.submit_link(payload)
-                    if status in (202, 208, 409):
-                        self.discord_desktop_seen.add(parsed[0])
+                    log("discord", f"newest desktop link handled with HTTP-style status {status}: {parsed[0]}")
             except Exception as error:
                 if available_logged:
                     log("discord", f"desktop monitoring unavailable: {error}")

@@ -107,6 +107,22 @@ class DiscordDesktopTests(unittest.TestCase):
             self.assertEqual(server.submit_link(payload), 409)
         self.assertEqual(server.pending[2], "CORRUPTION")
 
+    def test_only_newest_new_desktop_link_is_selected(self):
+        def payload(instance):
+            return {"url": (
+                f"roblox://experiences/start?placeId={monarchy.PLACE_ID}"
+                f"&gameInstanceId={instance}"
+            )}
+        first = "11111111-1111-1111-1111-111111111111"
+        second = "22222222-2222-2222-2222-222222222222"
+        third = "33333333-3333-3333-3333-333333333333"
+        known = {f"public:{first}"}
+        selected = monarchy.newest_unseen_desktop_candidate(
+            [payload(first), payload(second), payload(third)], known
+        )
+        self.assertIn(third, selected["url"])
+        self.assertEqual(known, {f"public:{first}", f"public:{second}", f"public:{third}"})
+
 
 if __name__ == "__main__":
     unittest.main()

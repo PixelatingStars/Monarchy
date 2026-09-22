@@ -13,6 +13,7 @@ import hashlib
 import ctypes
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -27,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.11"
+APP_VERSION = "0.4.0"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -35,7 +36,10 @@ PORT = 17381
 BIOMES = {"CORRUPTION", "DREAMSPACE", "GLITCH", "CYBERSPACE", "SINGULARITY", "HELL"}
 MIXED_CHANNEL = "BIOME-SPAWNER"
 APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
-DATA_DIR = APP_DIR / "data"
+LEGACY_DATA_DIR = APP_DIR / "data"
+DATA_DIR = (Path(os.environ["LOCALAPPDATA"]) / "Monarchy"
+            if os.name == "nt" and getattr(sys, "frozen", False) and os.environ.get("LOCALAPPDATA")
+            else LEGACY_DATA_DIR)
 SETTINGS_FILE = DATA_DIR / "settings.json"
 LOG_FILE = DATA_DIR / "activity.log"
 CHANNEL_FILE = DATA_DIR / "channel.json"
@@ -67,6 +71,21 @@ class _Input(ctypes.Structure):
 _play_click_lock = threading.Lock()
 
 
+def migrate_legacy_data() -> None:
+    """Preserve data from a portable build on the first installed/app-data run."""
+    if DATA_DIR == LEGACY_DATA_DIR or not LEGACY_DATA_DIR.is_dir():
+        return
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    for name in ("settings.json", "activity.log", "channel.json"):
+        source = LEGACY_DATA_DIR / name
+        destination = DATA_DIR / name
+        if source.is_file() and not destination.exists():
+            shutil.copy2(source, destination)
+
+
+migrate_legacy_data()
+
+
 def github_request(url: str, accept="application/vnd.github+json"):
     headers = {"Accept": accept, "User-Agent": f"Monarchy/{APP_VERSION}",
                "X-GitHub-Api-Version": "2022-11-28"}
@@ -83,14 +102,19 @@ def latest_update() -> dict | None:
         release = json.load(response)
     latest = version_key(str(release.get("tag_name", "")))
     current = version_key(APP_VERSION)
-    if not latest or not current or latest <= current:
+    if not latest or not current or latest < current:
         return None
     assets = {asset["name"]: asset for asset in release.get("assets", [])}
-    archive = assets.get("Monarchy-Windows-Portable.zip")
-    checksum = assets.get("Monarchy-Windows-Portable.zip.sha256")
-    if not archive or not checksum:
-        raise ValueError("release is missing the portable ZIP or SHA-256 file")
-    return {"version": str(release["tag_name"]).lstrip("v"), "archive": archive["url"],
+    installer = assets.get("Monarchy-Setup.exe")
+    checksum = assets.get("Monarchy-Setup.exe.sha256")
+    installed = (APP_DIR / "unins000.exe").exists()
+    if latest == current and installed:
+        return None
+    if not installer or not checksum:
+        if latest == current:
+            return None
+        raise ValueError("release is missing the installer or SHA-256 file")
+    return {"version": str(release["tag_name"]).lstrip("v"), "installer": installer["url"],
             "checksum": checksum["url"], "page": release.get("html_url", "")}
 
 
@@ -101,36 +125,27 @@ def download_asset(url: str, destination: Path) -> None:
                 output.write(chunk)
 
 
-def stage_update(update: dict) -> Path:
+def stage_update(update: dict) -> tuple[Path, Path]:
     update_dir = DATA_DIR / "update"
     update_dir.mkdir(parents=True, exist_ok=True)
-    archive = update_dir / "Monarchy-Windows-Portable.zip"
-    checksum = update_dir / "Monarchy-Windows-Portable.zip.sha256"
-    download_asset(update["archive"], archive)
+    installer = update_dir / "Monarchy-Setup.exe"
+    checksum = update_dir / "Monarchy-Setup.exe.sha256"
+    download_asset(update["installer"], installer)
     download_asset(update["checksum"], checksum)
     expected = checksum.read_text(encoding="utf-8").strip().split()[0].lower()
-    actual = hashlib.sha256(archive.read_bytes()).hexdigest()
+    with installer.open("rb") as stream:
+        actual = hashlib.file_digest(stream, "sha256").hexdigest()
     if not re.fullmatch(r"[0-9a-f]{64}", expected) or actual != expected:
-        archive.unlink(missing_ok=True)
+        installer.unlink(missing_ok=True)
         raise ValueError("downloaded update failed SHA-256 verification")
     script = Path(tempfile.gettempdir()) / f"monarchy-update-{os.getpid()}.ps1"
-    script.write_text(r'''param([string]$AppDir,[string]$Archive,[int]$ProcessId)
+    script.write_text(r'''param([string]$Installer,[int]$ProcessId)
 $ErrorActionPreference = "Stop"
 Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
-$Stage = Join-Path $env:TEMP ("Monarchy-" + [guid]::NewGuid().ToString("N"))
-New-Item -ItemType Directory -Path $Stage | Out-Null
-Expand-Archive -Force $Archive $Stage
-$Source = $Stage
-if (-not (Test-Path (Join-Path $Source "Monarchy.exe"))) {
-    $Child = Get-ChildItem $Stage -Directory | Select-Object -First 1
-    if ($Child -and (Test-Path (Join-Path $Child.FullName "Monarchy.exe"))) { $Source = $Child.FullName }
-}
-& robocopy.exe $Source $AppDir /E /XD (Join-Path $Source "data") /R:2 /W:1 | Out-Null
-if ($LASTEXITCODE -gt 7) { throw "Could not replace Monarchy files (robocopy exit $LASTEXITCODE)." }
-Remove-Item $Stage -Recurse -Force
-Start-Process (Join-Path $AppDir "Monarchy.exe")
+$Process = Start-Process $Installer -ArgumentList "/CURRENTUSER /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /FORCECLOSEAPPLICATIONS" -Wait -PassThru
+if ($Process.ExitCode -ne 0) { throw "Monarchy Setup exited with code $($Process.ExitCode)." }
 ''', encoding="utf-8")
-    return script
+    return script, installer
 PUBLIC_PATTERN = re.compile(
     r"(?:roblox://(?:placeID=|experiences/start\?[^\s]*?placeId=)|"
     r"https?://hewa7798\.github\.io/chromahublink/?\?[^\s]*?placeId=)"
@@ -942,12 +957,12 @@ class Dashboard(tk.Tk):
 
         def worker():
             try:
-                script = stage_update(self.available_update)
+                script, installer = stage_update(self.available_update)
             except Exception as error:
                 log("update", f"install failed: {error}")
                 self.after(0, lambda: self.update_failed(str(error)))
                 return
-            self.after(0, lambda: self.launch_staged_update(script))
+            self.after(0, lambda: self.launch_staged_update(script, installer))
         threading.Thread(target=worker, daemon=True).start()
 
     def update_failed(self, error):
@@ -955,13 +970,12 @@ class Dashboard(tk.Tk):
         self.update_button.configure(state="normal")
         messagebox.showerror("Monarchy update", error)
 
-    def launch_staged_update(self, script):
-        archive = DATA_DIR / "update" / "Monarchy-Windows-Portable.zip"
+    def launch_staged_update(self, script, installer):
         subprocess.Popen([
             "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
-            "-AppDir", str(APP_DIR), "-Archive", str(archive), "-ProcessId", str(os.getpid()),
+            "-Installer", str(installer), "-ProcessId", str(os.getpid()),
         ], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        log("update", f"installing v{self.available_update['version']}; restarting")
+        log("update", f"launching setup for v{self.available_update['version']}")
         self.destroy()
 
     def refresh(self):

@@ -2,6 +2,8 @@ import tempfile
 import unittest
 import sys
 import types
+import io
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -60,6 +62,35 @@ class UpdateTests(unittest.TestCase):
     def test_semantic_versions(self):
         self.assertEqual(monarchy.version_key("v0.2.2"), (0, 2, 2))
         self.assertIsNone(monarchy.version_key("latest"))
+
+    def test_same_version_portable_offers_installer_migration(self):
+        release = {
+            "tag_name": f"v{monarchy.APP_VERSION}",
+            "assets": [
+                {"name": "Monarchy-Setup.exe", "url": "setup"},
+                {"name": "Monarchy-Setup.exe.sha256", "url": "checksum"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(monarchy, "APP_DIR", Path(directory)), \
+             patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(release).encode())):
+            update = monarchy.latest_update()
+        self.assertEqual(update["installer"], "setup")
+
+    def test_same_version_installed_build_has_no_update(self):
+        release = {
+            "tag_name": f"v{monarchy.APP_VERSION}",
+            "assets": [
+                {"name": "Monarchy-Setup.exe", "url": "setup"},
+                {"name": "Monarchy-Setup.exe.sha256", "url": "checksum"},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            app_dir = Path(directory)
+            (app_dir / "unins000.exe").touch()
+            with patch.object(monarchy, "APP_DIR", app_dir), \
+                 patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(release).encode())):
+                self.assertIsNone(monarchy.latest_update())
 
 
 class PlayDetectionTests(unittest.TestCase):

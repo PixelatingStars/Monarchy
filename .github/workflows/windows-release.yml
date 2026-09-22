@@ -37,6 +37,10 @@ jobs:
             Start-Sleep -Seconds 15
           }
 
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
       - name: Create Python environment
         shell: powershell
         run: |
@@ -54,15 +58,17 @@ jobs:
           $Version = $Match.Matches[0].Groups[1].Value
           if ($Tag -ne "v$Version") { throw "Tag $Tag does not match APP_VERSION $Version." }
 
-      - name: Build portable package
+      - name: Build application and installer
         shell: powershell
         run: powershell -ExecutionPolicy Bypass -File .\build.ps1
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Monarchy-Windows-Portable
+          name: Monarchy-Windows
           path: |
+            windows/dist/Monarchy-Setup.exe
+            windows/dist/Monarchy-Setup.exe.sha256
             windows/dist/Monarchy-Windows-Portable.zip
             windows/dist/Monarchy-Windows-Portable.zip.sha256
 
@@ -74,4 +80,4 @@ jobs:
         run: |
           $Tag = "${{ github.ref_name }}"
           gh release create $Tag --title "Monarchy $Tag" --generate-notes
-          gh release upload $Tag .\dist\Monarchy-Windows-Portable.zip .\dist\Monarchy-Windows-Portable.zip.sha256 --clobber
+          gh release upload $Tag .\dist\Monarchy-Setup.exe .\dist\Monarchy-Setup.exe.sha256 .\dist\Monarchy-Windows-Portable.zip .\dist\Monarchy-Windows-Portable.zip.sha256 --clobber

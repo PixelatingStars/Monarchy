@@ -109,6 +109,19 @@ Windows v0.3.11 fixes concurrent Play attempts recreating incompatible ctypes
 now permanent module-level types, and a nonblocking Play-attempt lock skips any
 duplicate activation while one OCR/mouse attempt is already running.
 
+Windows v0.4.0 introduces the standard Windows installation path. GitHub
+releases now publish `Monarchy-Setup.exe` and its SHA-256 file in addition to a
+legacy portable ZIP for the one-time transition from pre-v0.4 updaters. The
+Inno Setup installer installs per-user under
+`%LOCALAPPDATA%\Programs\Monarchy`, creates Start Menu and optional desktop
+shortcuts, registers an uninstaller, and uses a purple crown icon derived from
+the existing Monarchy header. Packaged settings, logs, and channel state now
+live under `%LOCALAPPDATA%\Monarchy`; first launch migrates the corresponding
+files from an adjacent portable `data` directory when present. Future automatic
+updates verify the setup EXE checksum, close Monarchy, run Setup silently, and
+relaunch the installed app. Portable v0.4.0 offers its same-version installer
+as a migration, while an already installed v0.4.0 does not.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

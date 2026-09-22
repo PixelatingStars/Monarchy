@@ -3,6 +3,7 @@ Set-Location $PSScriptRoot
 
 if (-not (Test-Path .venv)) { & .\setup.ps1 }
 & .\.venv\Scripts\python.exe -m pip install pyinstaller==6.16.0
+& .\.venv\Scripts\python.exe .\make_icon.py
 
 # Resolve Tcl/Tk from the base Python installation used by the virtual
 # environment. This does not rely on initializing Tkinter during the build.
@@ -32,6 +33,7 @@ if (-not (Test-Path (Join-Path $Tesseract "tesseract.exe"))) {
 
 Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
 & .\.venv\Scripts\pyinstaller.exe --noconfirm --clean --windowed --name Monarchy `
+    --icon "assets\monarchy.ico" `
     --add-data "extension;extension" `
     --add-data "assets;assets" `
     --collect-all winotify monarchy.py
@@ -59,5 +61,20 @@ Compress-Archive -Force "$Portable\*" (Join-Path $PSScriptRoot "dist\Monarchy-Wi
 $Archive = Join-Path $PSScriptRoot "dist\Monarchy-Windows-Portable.zip"
 $Hash = (Get-FileHash -Algorithm SHA256 $Archive).Hash.ToLowerInvariant()
 Set-Content -Encoding ascii "$Archive.sha256" "$Hash  Monarchy-Windows-Portable.zip"
+
+$VersionMatch = Select-String -Path .\monarchy.py -Pattern '^APP_VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"$'
+if (-not $VersionMatch) { throw "APP_VERSION was not found." }
+$Version = $VersionMatch.Matches[0].Groups[1].Value
+$ISCC = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+if (-not (Test-Path $ISCC)) { throw "Inno Setup 6 was not found at $ISCC." }
+& $ISCC "/DMyAppVersion=$Version" .\installer.iss
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path .\dist\Monarchy-Setup.exe)) {
+    throw "The Monarchy installer was not created."
+}
+$Setup = Join-Path $PSScriptRoot "dist\Monarchy-Setup.exe"
+$SetupHash = (Get-FileHash -Algorithm SHA256 $Setup).Hash.ToLowerInvariant()
+Set-Content -Encoding ascii "$Setup.sha256" "$SetupHash  Monarchy-Setup.exe"
 Write-Host "Built dist\Monarchy-Windows-Portable.zip"
 Write-Host "Built dist\Monarchy-Windows-Portable.zip.sha256"
+Write-Host "Built dist\Monarchy-Setup.exe"
+Write-Host "Built dist\Monarchy-Setup.exe.sha256"

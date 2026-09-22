@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Build Monarchy Portable
+title Build Monarchy Installer
 
 echo Building Monarchy for Windows...
 echo.
@@ -10,7 +10,7 @@ if errorlevel 1 (
   echo.
   echo BUILD FAILED.
   echo Read the error above. If Tesseract is missing, install 64-bit
-  echo Tesseract OCR into C:\Program Files\Tesseract-OCR and try again.
+  echo Tesseract OCR and Inno Setup 6, then try again.
   echo.
   pause
   exit /b 1
@@ -18,8 +18,8 @@ if errorlevel 1 (
 
 echo.
 echo BUILD COMPLETE.
-echo Send this file to your friend:
-echo %~dp0dist\Monarchy-Windows-Portable.zip
+echo Share or install this file:
+echo %~dp0dist\Monarchy-Setup.exe
 echo.
-explorer.exe /select,"%~dp0dist\Monarchy-Windows-Portable.zip"
+explorer.exe /select,"%~dp0dist\Monarchy-Setup.exe"
 pause

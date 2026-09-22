@@ -14,8 +14,17 @@ biome sessions, and closes Roblox when the target biome ends.
 - Tesseract OCR on `PATH` when running from source
 - A 1920x1080 Roblox window for the initial preview build
 
-The portable release bundles Python dependencies and Tesseract OCR. It never
-contains the builder's Roblox cookies, Discord credentials, logs, or settings.
+The installer and portable release bundle Python dependencies and Tesseract
+OCR. They never contain the builder's Roblox cookies, Discord credentials,
+logs, or settings.
+
+## Install (recommended)
+
+Download and run `Monarchy-Setup.exe`. It installs for the current Windows user
+without an administrator prompt, creates Start Menu and optional desktop
+shortcuts, and launches `Monarchy.exe`. The program and installer use Monarchy's
+purple crown icon. Settings and logs live under `%LOCALAPPDATA%\Monarchy`, while
+program files live under `%LOCALAPPDATA%\Programs\Monarchy`.
 
 ## Discord desktop monitoring
 
@@ -35,13 +44,15 @@ version plus the recent Monarchy activity log for compatibility work.
 3. Load `extension` as an unpacked browser extension.
 4. Install 64-bit Tesseract OCR, then run `.\run-monarchy.cmd`.
 
-The app stores settings and logs beside the executable in `data`. Delete that
-folder to reset the portable copy.
+Source runs store settings and logs beside the script. Packaged builds store
+them in `%LOCALAPPDATA%\Monarchy`. On first launch, an older adjacent portable
+`data` folder is migrated automatically. Delete the AppData folder to reset it.
 
-## Build a portable ZIP
+## Build the installer and portable ZIP
 
-On Windows, double-click `BUILD-PORTABLE.cmd`. When it finishes, Explorer
-selects the friend-ready `dist\Monarchy-Windows-Portable.zip` automatically.
+On Windows, install Inno Setup 6, then double-click `BUILD-PORTABLE.cmd`. The
+build produces the friend-ready `dist\Monarchy-Setup.exe` as well as the legacy
+`dist\Monarchy-Windows-Portable.zip` transition package.
 The builder also copies and verifies Python's Tcl/Tk runtime so the packaged
 dashboard can start on another PC. If Tcl/Tk is missing, reinstall 64-bit
 Python from python.org with the Tcl/Tk component enabled, then rebuild.
@@ -70,10 +81,11 @@ creates the latest GitHub release with the ZIP and SHA-256 assets. It can also
 be run manually to produce downloadable workflow artifacts without publishing
 a release.
 
-Portable builds show an update banner, verify the downloaded ZIP against the
-published SHA-256 file, preserve the local `data` directory, replace program
-files after Monarchy exits, and restart automatically. Updates are downloaded
-from public GitHub releases and do not use credentials.
+Packaged builds show an update banner, download `Monarchy-Setup.exe`, verify it
+against the published SHA-256 file, close Monarchy, run the installer silently,
+and relaunch automatically. The v0.4.0 release also retains a portable ZIP so
+older updaters can transition to the installer-aware version. Updates come from
+public GitHub releases and do not use credentials.
 
 ## Safety and limitations
 

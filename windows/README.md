@@ -79,7 +79,8 @@ from public GitHub releases and do not use credentials.
 
 - Play activation verifies Roblox has foreground focus, OCR-locates the visible
   Play label, moves to its center, pauses for the hover state, and sends a
-  deliberate held left-button press/release. It then verifies that the in-game
+  deliberate held left-button press/release through the Windows `SendInput`
+  API, which Roblox can receive as game input. It then verifies that the in-game
   Roll control appeared before continuing. It uses the actual window
   dimensions, including 2560×1440, rather than fixed coordinates. A
   `Windows did not give foreground focus to Roblox` failure means another app

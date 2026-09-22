@@ -97,6 +97,12 @@ recognized Play center over 300 ms, allows the hover state to settle for 500 ms,
 then sends an explicit left-button down, holds it for 200 ms, and releases it.
 The existing Roll OCR check and retry limit remain the success and safety gates.
 
+Windows v0.3.10 replaces PyAutoGUI's mouse-button injection with the lower-level
+Windows `SendInput` API after the pointer movement worked but Roblox ignored the
+button event. PyAutoGUI remains responsible only for the visible, timed pointer
+movement; a native `MOUSEEVENTF_LEFTDOWN`/`MOUSEEVENTF_LEFTUP` pair performs the
+200 ms click. Failure to inject is logged instead of being treated as success.
+
 Windows v0.2.1 adds a small purple crown beside the purple MONARCHY dashboard
 heading as the first end-to-end updater test. A GitHub Actions Windows workflow
 builds portable artifacts on demand and, for `v*` tags matching `APP_VERSION`,

@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-APP_VERSION = "0.3.9"
+APP_VERSION = "0.3.10"
 GITHUB_REPOSITORY = "PixelatingStars/Monarchy"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}"
 PLACE_ID = "15532962292"
@@ -380,6 +380,44 @@ def play_box_from_ocr(data):
     return max(matches, default=(None, None), key=lambda item: item[0])
 
 
+def send_windows_left_click(hold_seconds=.2) -> None:
+    """Send a game-compatible left click through the Windows SendInput API."""
+    import ctypes
+    from ctypes import wintypes
+
+    class MouseInput(ctypes.Structure):
+        _fields_ = (
+            ("dx", wintypes.LONG),
+            ("dy", wintypes.LONG),
+            ("mouseData", wintypes.DWORD),
+            ("dwFlags", wintypes.DWORD),
+            ("time", wintypes.DWORD),
+            ("dwExtraInfo", ctypes.c_void_p),
+        )
+
+    class InputUnion(ctypes.Union):
+        _fields_ = (("mi", MouseInput),)
+
+    class Input(ctypes.Structure):
+        _anonymous_ = ("value",)
+        _fields_ = (("type", wintypes.DWORD), ("value", InputUnion))
+
+    send_input = ctypes.windll.user32.SendInput
+    send_input.argtypes = (wintypes.UINT, ctypes.POINTER(Input), ctypes.c_int)
+    send_input.restype = wintypes.UINT
+
+    def send(flags):
+        event = Input(type=0, mi=MouseInput(dwFlags=flags))
+        if send_input(1, ctypes.byref(event), ctypes.sizeof(Input)) != 1:
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    send(0x0002)  # MOUSEEVENTF_LEFTDOWN
+    try:
+        time.sleep(hold_seconds)
+    finally:
+        send(0x0004)  # MOUSEEVENTF_LEFTUP
+
+
 def activate_play_with_mouse(window) -> bool:
     """OCR-locate and click Play inside the lower-left of the Roblox window."""
     import pyautogui
@@ -411,11 +449,9 @@ def activate_play_with_mouse(window) -> bool:
     log("play", f"moving to OCR-detected Play at {click_x},{click_y} (confidence {confidence:.0f})")
     pyautogui.moveTo(click_x, click_y, duration=.3)
     time.sleep(.5)
-    log("play", "pressing and holding the left mouse button on Play")
-    pyautogui.mouseDown(button="left")
-    time.sleep(.2)
-    pyautogui.mouseUp(button="left")
-    log("play", "released the left mouse button on Play")
+    log("play", "sending Windows SendInput left click on Play")
+    send_windows_left_click(.2)
+    log("play", "Windows SendInput left click released on Play")
     return True
 
 
